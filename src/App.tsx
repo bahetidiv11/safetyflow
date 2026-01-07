@@ -3,7 +3,17 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import { AppProvider } from "@/contexts/AppContext";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import CaseIntake from "./pages/CaseIntake";
+import RiskStratification from "./pages/RiskStratification";
+import ConsentCheck from "./pages/ConsentCheck";
+import MissingInfo from "./pages/MissingInfo";
+import QuestionBuilder from "./pages/QuestionBuilder";
+import OutreachPreview from "./pages/OutreachPreview";
+import ReporterInbox from "./pages/ReporterInbox";
+import ReporterForm from "./pages/ReporterForm";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -11,15 +21,25 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <AppProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Login />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/intake" element={<CaseIntake />} />
+            <Route path="/case/:id/risk" element={<RiskStratification />} />
+            <Route path="/case/:id/consent" element={<ConsentCheck />} />
+            <Route path="/case/:id/missing" element={<MissingInfo />} />
+            <Route path="/case/:id/questions" element={<QuestionBuilder />} />
+            <Route path="/case/:id/outreach" element={<OutreachPreview />} />
+            <Route path="/reporter/inbox" element={<ReporterInbox />} />
+            <Route path="/reporter/form/:id" element={<ReporterForm />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </AppProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
