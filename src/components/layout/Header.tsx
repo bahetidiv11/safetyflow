@@ -1,11 +1,12 @@
-import { Shield, Bell, User, LogOut } from 'lucide-react';
+import { Shield, Bell, User, LogOut, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useApp } from '@/contexts/AppContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export function Header() {
   const { userRole, setIsAuthenticated, setUserRole } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -13,10 +14,17 @@ export function Header() {
     navigate('/');
   };
 
+  const showBackButton = location.pathname !== '/' && location.pathname !== '/dashboard';
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="container flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-3">
+          {showBackButton && (
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
           <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary">
             <Shield className="h-5 w-5 text-primary-foreground" />
           </div>
