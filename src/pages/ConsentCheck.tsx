@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Shield, 
@@ -12,11 +12,12 @@ import {
   User,
   Building
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Header } from '@/components/layout/Header';
-import { ProgressTracker } from '@/components/shared/ProgressTracker';
-import { cn } from '@/lib/utils';
-import { ContactChannel } from '@/types/icsr';
+import { Button } from '../components/ui/button';
+import { Header } from '../components/layout/Header';
+import { ProgressTracker } from '../components/shared/ProgressTracker';
+import { cn } from '../lib/utils';
+import { ContactChannel, ConsentStatus } from '../types/icsr';
+import { useApp } from '../contexts/AppContext';
 
 interface ChannelOption {
   id: ContactChannel;
@@ -26,21 +27,27 @@ interface ChannelOption {
   preferred?: boolean;
 }
 
-const channels: ChannelOption[] = [
-  { id: 'email', label: 'Email', icon: Mail, available: true, preferred: true },
-  { id: 'portal', label: 'Secure Portal', icon: Globe, available: true },
-  { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, available: false },
-];
-
 export default function ConsentCheck() {
   const navigate = useNavigate();
+  const { currentCase, updateCaseConsent } = useApp();
   const [selectedChannel, setSelectedChannel] = useState<ContactChannel>('email');
 
+  // Derive reporter type from extracted data
+  const extractedReporterType = currentCase?.extractedData?.reporter_type?.value || 'hcp';
+  const isHcp = extractedReporterType === 'hcp';
+
+  const channels: ChannelOption[] = [
+    { id: 'email', label: 'Email', icon: Mail, available: true, preferred: true },
+    { id: 'portal', label: 'Secure Portal', icon: Globe, available: true },
+    { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, available: false },
+  ];
+
+  // Dynamic consent checks based on extracted data
   const consentChecks = [
     { 
       label: 'Reporter identity verified', 
       status: 'pass' as const,
-      detail: 'Healthcare Professional (Treating Oncologist)'
+      detail: isHcp ? 'Healthcare Professional (Treating Physician)' : 'Patient/Consumer'
     },
     { 
       label: 'Re-contact consent obtained', 
@@ -58,6 +65,40 @@ export default function ConsentCheck() {
       detail: 'No GDPR restrictions or opt-outs on file'
     },
   ];
+
+  const handleProceed = () => {
+    // Update case with consent status
+    const consentStatus: ConsentStatus = {
+      recontactAllowed: true,
+      allowedChannels: channels.filter(c => c.available).map(c => c.id),
+      preferredChannel: selectedChannel,
+      reporterDetails: {
+        type: extractedReporterType as 'hcp' | 'patient',
+        role: isHcp ? 'Treating Physician' : undefined,
+        institution: isHcp ? 'Medical Center' : undefined,
+        email: 'reporter@example.com'
+      }
+    };
+    
+    updateCaseConsent(consentStatus);
+    navigate('/case/new/missing');
+  };
+
+  if (!currentCase?.extractedData) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container px-4 py-8 max-w-4xl">
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">No case data available. Please start from intake.</p>
+            <Button variant="hero" onClick={() => navigate('/intake')}>
+              Go to Case Intake
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -81,7 +122,7 @@ export default function ConsentCheck() {
           </p>
         </div>
 
-        {/* Reporter Information */}
+        {/* Reporter Information - Dynamic from extracted data */}
         <div className="card-elevated p-6 mb-6">
           <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
             <User className="h-5 w-5 text-muted-foreground" />
@@ -92,20 +133,26 @@ export default function ConsentCheck() {
               <p className="text-sm text-muted-foreground mb-1">Reporter Type</p>
               <div className="flex items-center gap-2">
                 <Building className="h-4 w-4 text-accent" />
-                <span className="font-medium text-foreground">Healthcare Professional</span>
+                <span className="font-medium text-foreground">
+                  {isHcp ? 'Healthcare Professional' : 'Patient/Consumer'}
+                </span>
               </div>
             </div>
             <div className="p-4 rounded-lg bg-muted/30">
-              <p className="text-sm text-muted-foreground mb-1">Reporter Role</p>
-              <p className="font-medium text-foreground">Treating Oncologist</p>
+              <p className="text-sm text-muted-foreground mb-1">Suspect Drug</p>
+              <p className="font-medium text-foreground">
+                {currentCase.extractedData.suspect_drug?.value || 'Not specified'}
+              </p>
             </div>
             <div className="p-4 rounded-lg bg-muted/30">
-              <p className="text-sm text-muted-foreground mb-1">Institution</p>
-              <p className="font-medium text-foreground">City General Hospital</p>
+              <p className="text-sm text-muted-foreground mb-1">Case Number</p>
+              <p className="font-medium text-foreground">{currentCase.caseNumber}</p>
             </div>
             <div className="p-4 rounded-lg bg-muted/30">
-              <p className="text-sm text-muted-foreground mb-1">Last Contact</p>
-              <p className="font-medium text-foreground">Initial report (Jan 5, 2024)</p>
+              <p className="text-sm text-muted-foreground mb-1">Risk Level</p>
+              <p className="font-medium text-foreground capitalize">
+                {currentCase.riskAnalysis?.level || 'Pending'} Risk
+              </p>
             </div>
           </div>
         </div>
@@ -185,7 +232,7 @@ export default function ConsentCheck() {
           <Button variant="outline" onClick={() => navigate('/case/new/risk')}>
             Back
           </Button>
-          <Button variant="hero" onClick={() => navigate('/case/new/missing')}>
+          <Button variant="hero" onClick={handleProceed}>
             Identify Missing Information
             <ArrowRight className="h-4 w-4" />
           </Button>

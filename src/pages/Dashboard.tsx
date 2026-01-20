@@ -9,69 +9,65 @@ import {
   FileText,
   Zap
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Header } from '@/components/layout/Header';
-import { RiskBadge } from '@/components/shared/RiskBadge';
-import { StatusPill } from '@/components/shared/StatusPill';
-import { useApp } from '@/contexts/AppContext';
-import { ICSRCase } from '@/types/icsr';
+import { Button } from '../components/ui/button';
+import { Header } from '../components/layout/Header';
+import { RiskBadge } from '../components/shared/RiskBadge';
+import { StatusPill } from '../components/shared/StatusPill';
+import { useApp } from '../contexts/AppContext';
+import { ICSRCase, RiskLevel, CaseStatus } from '../types/icsr';
 
-const mockCases: ICSRCase[] = [
+// Mock cases with the new structure for display
+interface DisplayCase {
+  id: string;
+  caseNumber: string;
+  suspectDrug: string;
+  adverseEvent: string;
+  reporterType: 'hcp' | 'patient';
+  riskLevel: RiskLevel;
+  riskScore: number;
+  status: CaseStatus;
+}
+
+const mockDisplayCases: DisplayCase[] = [
   {
     id: '1',
     caseNumber: 'ICSR-2024-0847',
-    narrativeText: '',
     suspectDrug: 'Pembrolizumab',
     adverseEvent: 'Severe hepatotoxicity',
-    seriousnessIndicators: ['Life-threatening', 'Hospitalization'],
     reporterType: 'hcp',
     riskLevel: 'high',
     riskScore: 87,
     status: 'risk_classified',
-    createdAt: new Date(),
-    updatedAt: new Date(),
   },
   {
     id: '2',
     caseNumber: 'ICSR-2024-0846',
-    narrativeText: '',
     suspectDrug: 'Adalimumab',
     adverseEvent: 'Injection site reaction',
-    seriousnessIndicators: [],
     reporterType: 'patient',
     riskLevel: 'low',
     riskScore: 24,
     status: 'followup_sent',
-    createdAt: new Date(),
-    updatedAt: new Date(),
   },
   {
     id: '3',
     caseNumber: 'ICSR-2024-0845',
-    narrativeText: '',
     suspectDrug: 'Nivolumab',
     adverseEvent: 'Pneumonitis',
-    seriousnessIndicators: ['Hospitalization'],
     reporterType: 'hcp',
     riskLevel: 'medium',
     riskScore: 62,
     status: 'response_received',
-    createdAt: new Date(),
-    updatedAt: new Date(),
   },
   {
     id: '4',
     caseNumber: 'ICSR-2024-0844',
-    narrativeText: '',
     suspectDrug: 'Trastuzumab',
     adverseEvent: 'Cardiotoxicity',
-    seriousnessIndicators: ['Life-threatening'],
     reporterType: 'hcp',
     riskLevel: 'high',
     riskScore: 91,
     status: 'intake',
-    createdAt: new Date(),
-    updatedAt: new Date(),
   },
 ];
 
@@ -203,7 +199,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {mockCases.map((caseItem) => (
+                {mockDisplayCases.map((caseItem) => (
                   <tr 
                     key={caseItem.id} 
                     className="hover:bg-muted/30 transition-colors cursor-pointer"

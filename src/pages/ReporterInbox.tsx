@@ -6,39 +6,38 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Header } from '@/components/layout/Header';
+import { Button } from '../components/ui/button';
+import { Header } from '../components/layout/Header';
+import { useApp } from '../contexts/AppContext';
 
-const mockRequests = [
-  {
+export default function ReporterInbox() {
+  const navigate = useNavigate();
+  const { currentCase } = useApp();
+
+  // Dynamic request from currentCase or fallback mock
+  const requests = currentCase ? [{
+    id: currentCase.id,
+    subject: `Important Safety Follow-up: Case ${currentCase.caseNumber}`,
+    drug: currentCase.extractedData?.suspect_drug?.value || 'Unknown Drug',
+    receivedAt: 'Just now',
+    urgency: currentCase.riskAnalysis?.level === 'high' ? 'high' : 'low',
+    questionsCount: currentCase.followUpQuestions?.length || 0,
+    estimatedTime: `${Math.max(2, currentCase.followUpQuestions?.length || 0)} min`,
+  }] : [{
     id: '1',
     subject: 'Important Safety Follow-up: Case ICSR-2024-0847',
     drug: 'Pembrolizumab',
     receivedAt: '2 hours ago',
-    urgency: 'high',
+    urgency: 'high' as const,
     questionsCount: 4,
     estimatedTime: '3 min',
-  },
-  {
-    id: '2',
-    subject: 'Follow-up Request: Case ICSR-2024-0832',
-    drug: 'Adalimumab',
-    receivedAt: '3 days ago',
-    urgency: 'low',
-    questionsCount: 2,
-    estimatedTime: '2 min',
-  },
-];
-
-export default function ReporterInbox() {
-  const navigate = useNavigate();
+  }];
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
       
       <main className="container px-4 py-8 max-w-2xl">
-        {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground mb-2">Follow-up Requests</h1>
           <p className="text-muted-foreground">
@@ -46,7 +45,6 @@ export default function ReporterInbox() {
           </p>
         </div>
 
-        {/* Trust Banner */}
         <div className="card-elevated p-4 mb-6 bg-gradient-to-r from-accent/5 to-transparent border-accent/20">
           <div className="flex items-center gap-3">
             <Shield className="h-5 w-5 text-accent" />
@@ -59,13 +57,12 @@ export default function ReporterInbox() {
           </div>
         </div>
 
-        {/* Request List */}
         <div className="space-y-4">
-          {mockRequests.map((request) => (
+          {requests.map((request) => (
             <div 
               key={request.id}
               className="card-elevated p-5 hover:shadow-elevated transition-shadow cursor-pointer"
-              onClick={() => navigate(`/reporter/form/${request.id}`)}
+              onClick={() => navigate('/reporter/form/current')}
             >
               <div className="flex items-start gap-4">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
@@ -105,7 +102,6 @@ export default function ReporterInbox() {
           ))}
         </div>
 
-        {/* Help Text */}
         <div className="mt-8 text-center">
           <p className="text-sm text-muted-foreground">
             Questions? Contact us at{' '}

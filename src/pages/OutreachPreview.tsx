@@ -10,22 +10,48 @@ import {
   CheckCircle,
   Edit2
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Header } from '@/components/layout/Header';
-import { ProgressTracker } from '@/components/shared/ProgressTracker';
-import { cn } from '@/lib/utils';
+import { Button } from '../components/ui/button';
+import { Header } from '../components/layout/Header';
+import { ProgressTracker } from '../components/shared/ProgressTracker';
+import { cn } from '../lib/utils';
+import { useApp } from '../contexts/AppContext';
 
 export default function OutreachPreview() {
   const navigate = useNavigate();
+  const { currentCase, updateCaseStatus } = useApp();
   const [isSending, setIsSending] = useState(false);
   const [isSent, setIsSent] = useState(false);
+
+  // Dynamic template data from currentCase
+  const reporterType = currentCase?.extractedData?.reporter_type?.value || 'hcp';
+  const isHcp = reporterType === 'hcp';
+  const drugName = currentCase?.extractedData?.suspect_drug?.value || 'the medication';
+  const caseNumber = currentCase?.caseNumber || 'ICSR-2024-XXXX';
+  const questionCount = currentCase?.followUpQuestions?.length || 0;
 
   const handleSend = async () => {
     setIsSending(true);
     await new Promise(resolve => setTimeout(resolve, 1500));
     setIsSending(false);
     setIsSent(true);
+    updateCaseStatus('followup_sent');
   };
+
+  if (!currentCase?.followUpQuestions) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container px-4 py-8 max-w-4xl">
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">No case data available. Please start from intake.</p>
+            <Button variant="hero" onClick={() => navigate('/intake')}>
+              Go to Case Intake
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (isSent) {
     return (
@@ -39,7 +65,7 @@ export default function OutreachPreview() {
               </div>
               <h1 className="text-2xl font-bold text-foreground mb-2">Follow-up Sent Successfully</h1>
               <p className="text-muted-foreground mb-8 max-w-md">
-                The personalised follow-up request has been sent to the reporter via email. You'll be notified when they respond.
+                The personalised follow-up request for case {caseNumber} has been sent to the {isHcp ? 'healthcare professional' : 'patient'} via email. You'll be notified when they respond.
               </p>
               <div className="card-elevated p-6 mb-8 text-left max-w-md mx-auto">
                 <h3 className="font-semibold text-foreground mb-3">Case Status Updated</h3>
@@ -92,7 +118,9 @@ export default function OutreachPreview() {
               </div>
               <div>
                 <p className="font-medium text-foreground">Email</p>
-                <p className="text-sm text-muted-foreground">Preferred channel</p>
+                <p className="text-sm text-muted-foreground">
+                  {currentCase.consentStatus?.preferredChannel === 'email' ? 'Preferred channel' : 'Selected channel'}
+                </p>
               </div>
             </div>
             <div className="flex-1" />
@@ -103,7 +131,7 @@ export default function OutreachPreview() {
           </div>
         </div>
 
-        {/* Email Preview */}
+        {/* Email Preview - Using template literals */}
         <div className="card-elevated overflow-hidden mb-6">
           <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
             <h2 className="font-semibold text-foreground">Email Preview</h2>
@@ -118,32 +146,34 @@ export default function OutreachPreview() {
               <div className="grid gap-2 text-sm">
                 <div className="flex">
                   <span className="w-20 text-muted-foreground">To:</span>
-                  <span className="text-foreground">dr.smith@cityhospital.org</span>
+                  <span className="text-foreground">{isHcp ? 'healthcare.professional@hospital.org' : 'patient@email.com'}</span>
                 </div>
                 <div className="flex">
                   <span className="w-20 text-muted-foreground">Subject:</span>
-                  <span className="text-foreground font-medium">Important Safety Follow-up: Case ICSR-2024-0847</span>
+                  <span className="text-foreground font-medium">Important Safety Follow-up: Case {caseNumber}</span>
                 </div>
               </div>
             </div>
 
-            {/* Email Body */}
+            {/* Email Body - Dynamic content */}
             <div className="prose prose-sm max-w-none">
-              <p className="text-foreground">Dear Dr. Smith,</p>
+              <p className="text-foreground">
+                Dear {isHcp ? 'Healthcare Professional' : 'Patient'},
+              </p>
               
               <p className="text-foreground">
-                Thank you for reporting a suspected adverse event involving <strong>pembrolizumab</strong>. Your report is helping us ensure patient safety and advance our understanding of this treatment.
+                Thank you for reporting a suspected adverse event involving <strong>{drugName}</strong>. Your report is helping us ensure patient safety and advance our understanding of this treatment.
               </p>
 
               <div className="my-4 p-4 rounded-lg bg-accent/5 border border-accent/20">
                 <p className="text-sm font-medium text-foreground mb-2">Why we're reaching out:</p>
                 <p className="text-sm text-muted-foreground mb-0">
-                  To complete our safety assessment, we need a few additional details about the patient's condition. This information is critical for regulatory reporting and to help protect other patients.
+                  To complete our safety assessment, we need a few additional details about {isHcp ? "the patient's condition" : 'your condition'}. This information is critical for regulatory reporting and to help protect other patients.
                 </p>
               </div>
 
               <p className="text-foreground">
-                We've prepared a short form (estimated 3 minutes) with only the most essential questions. Your expertise is invaluable in helping us understand this case fully.
+                We've prepared a short form (estimated {Math.max(2, questionCount)} minutes) with only {questionCount} essential question{questionCount !== 1 ? 's' : ''}. {isHcp ? 'Your expertise is invaluable in helping us understand this case fully.' : 'Your feedback is important to us.'}
               </p>
 
               <div className="my-4 p-4 rounded-lg bg-primary/5 border border-primary/20 text-center">
