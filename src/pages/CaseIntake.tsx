@@ -9,12 +9,14 @@ import {
   Loader2,
   ChevronDown
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Header } from '@/components/layout/Header';
-import { useApp } from '@/contexts/AppContext';
-import { ExtractedData, ICSRCase } from '@/types/icsr';
-import { cn } from '@/lib/utils';
+import { Button } from '../components/ui/button';
+import { Textarea } from '../components/ui/textarea';
+import { Header } from '../components/layout/Header';
+import { useApp, calculateRisk } from '../contexts/AppContext';
+import { AIExtractedData, MissingField } from '../types/icsr';
+import { cn } from '../lib/utils';
+import { supabase } from '../integrations/supabase/client';
+import { toast } from 'sonner';
 
 const sampleNarrative = `A 67-year-old male patient with metastatic melanoma was treated with pembrolizumab 200mg IV every 3 weeks. After the 4th infusion, the patient developed progressive fatigue, jaundice, and abdominal discomfort. Laboratory tests revealed ALT 890 U/L (normal <40), AST 720 U/L (normal <35), and total bilirubin 8.2 mg/dL.
 
@@ -24,63 +26,101 @@ Patient is currently recovering but remains hospitalised. The reporter (treating
 
 export default function CaseIntake() {
   const navigate = useNavigate();
-  const { setCurrentCase } = useApp();
+  const { initializeNewCase, updateCaseExtraction, updateCaseRiskAnalysis, currentCase, setCurrentCase } = useApp();
   const [narrative, setNarrative] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
-  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
+  const [extractedData, setExtractedData] = useState<AIExtractedData | null>(null);
+  const [missingFields, setMissingFields] = useState<MissingField[]>([]);
 
   const handleExtract = async () => {
+    if (!narrative.trim()) return;
+    
     setIsExtracting(true);
     
-    // Simulate AI extraction
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const mockExtraction: ExtractedData = {
-      suspectDrug: { value: 'Pembrolizumab 200mg IV', confidence: 0.96 },
-      adverseEvent: { value: 'Immune-mediated hepatitis (hepatotoxicity)', confidence: 0.94 },
-      seriousness: { 
-        indicators: ['Life-threatening (severe liver injury)', 'Hospitalization required'], 
-        confidence: 0.98 
-      },
-      reporterType: { value: 'hcp', confidence: 0.95 },
-      patientAge: { value: '67 years, male', confidence: 0.99 },
-      eventDate: { value: 'After 4th infusion (~12 weeks)', confidence: 0.85 },
-    };
-    
-    setExtractedData(mockExtraction);
-    setIsExtracting(false);
+    try {
+      const { data, error } = await supabase.functions.invoke('extract-icsr', {
+        body: { narrative }
+      });
+
+      if (error) {
+        console.error('Extraction error:', error);
+        toast.error('Failed to extract data. Please try again.');
+        setIsExtracting(false);
+        return;
+      }
+
+      if (data.error) {
+        toast.error(data.error);
+        setIsExtracting(false);
+        return;
+      }
+
+      setExtractedData(data.extractedData);
+      setMissingFields(data.missingFieldsDetailed);
+      
+      // Initialize the case with narrative
+      initializeNewCase(narrative);
+      
+      toast.success('Data extracted successfully!');
+    } catch (err) {
+      console.error('Extraction failed:', err);
+      toast.error('Extraction failed. Please try again.');
+    } finally {
+      setIsExtracting(false);
+    }
   };
 
   const handleProceed = () => {
-    const newCase: ICSRCase = {
-      id: 'new-case-' + Date.now(),
-      caseNumber: `ICSR-2024-${String(Math.floor(Math.random() * 1000)).padStart(4, '0')}`,
-      narrativeText: narrative,
-      suspectDrug: extractedData?.suspectDrug.value || '',
-      adverseEvent: extractedData?.adverseEvent.value || '',
-      seriousnessIndicators: extractedData?.seriousness.indicators || [],
-      reporterType: extractedData?.reporterType.value || 'hcp',
-      riskLevel: 'high',
-      riskScore: 87,
-      status: 'intake',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      extractedData,
-    };
+    if (!extractedData || !currentCase) return;
     
-    setCurrentCase(newCase);
+    // Update case with extracted data and missing fields
+    updateCaseExtraction(extractedData, missingFields);
+    
+    // Calculate and set risk analysis
+    const riskAnalysis = calculateRisk(extractedData, missingFields);
+    updateCaseRiskAnalysis(riskAnalysis);
+    
     navigate('/case/new/risk');
   };
 
   const loadSample = () => {
     setNarrative(sampleNarrative);
     setExtractedData(null);
+    setMissingFields([]);
   };
 
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.9) return 'text-success bg-success/10';
     if (confidence >= 0.7) return 'text-warning bg-warning/10';
     return 'text-risk-high bg-risk-high/10';
+  };
+
+  const renderExtractedField = (label: string, field: { value: string | null; confidence: number; found: boolean } | undefined) => {
+    if (!field) return null;
+    
+    return (
+      <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/30">
+        <div className="flex-1">
+          <p className="text-sm text-muted-foreground mb-1">{label}</p>
+          <p className="font-medium text-foreground">
+            {field.found && field.value ? field.value : <span className="text-muted-foreground italic">Not found in narrative</span>}
+          </p>
+        </div>
+        {field.found && (
+          <span className={cn(
+            'px-2 py-1 rounded-full text-xs font-medium',
+            getConfidenceColor(field.confidence)
+          )}>
+            {Math.round(field.confidence * 100)}% confident
+          </span>
+        )}
+        {!field.found && (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
+            Missing
+          </span>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -117,6 +157,7 @@ export default function CaseIntake() {
             onChange={(e) => {
               setNarrative(e.target.value);
               setExtractedData(null);
+              setMissingFields([]);
             }}
           />
           <div className="flex items-center justify-between mt-4">
@@ -155,90 +196,108 @@ export default function CaseIntake() {
               </div>
 
               <div className="grid gap-4">
-                {/* Suspect Drug */}
-                <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/30">
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mb-1">Suspect Drug</p>
-                    <p className="font-medium text-foreground">{extractedData.suspectDrug.value}</p>
-                  </div>
-                  <span className={cn(
-                    'px-2 py-1 rounded-full text-xs font-medium',
-                    getConfidenceColor(extractedData.suspectDrug.confidence)
-                  )}>
-                    {Math.round(extractedData.suspectDrug.confidence * 100)}% confident
-                  </span>
-                </div>
-
-                {/* Adverse Event */}
-                <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/30">
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mb-1">Adverse Event</p>
-                    <p className="font-medium text-foreground">{extractedData.adverseEvent.value}</p>
-                  </div>
-                  <span className={cn(
-                    'px-2 py-1 rounded-full text-xs font-medium',
-                    getConfidenceColor(extractedData.adverseEvent.confidence)
-                  )}>
-                    {Math.round(extractedData.adverseEvent.confidence * 100)}% confident
-                  </span>
-                </div>
-
+                {renderExtractedField('Suspect Drug', extractedData.suspect_drug)}
+                {renderExtractedField('Adverse Event', extractedData.adverse_event)}
+                
                 {/* Seriousness */}
                 <div className="flex items-start gap-4 p-4 rounded-lg bg-risk-high/5 border border-risk-high/20">
                   <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mb-2">Seriousness Indicators</p>
-                    <div className="flex flex-wrap gap-2">
-                      {extractedData.seriousness.indicators.map((indicator) => (
-                        <span 
-                          key={indicator}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium risk-badge-high"
-                        >
-                          <AlertCircle className="h-3 w-3" />
-                          {indicator}
-                        </span>
-                      ))}
-                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">Severity & Seriousness Indicators</p>
+                    <p className="font-medium text-foreground mb-2">
+                      {extractedData.severity?.value || 'Not determined'}
+                    </p>
+                    {extractedData.seriousness_indicators && extractedData.seriousness_indicators.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {extractedData.seriousness_indicators.map((indicator, idx) => (
+                          <span 
+                            key={idx}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium risk-badge-high"
+                          >
+                            <AlertCircle className="h-3 w-3" />
+                            {indicator}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <span className={cn(
-                    'px-2 py-1 rounded-full text-xs font-medium',
-                    getConfidenceColor(extractedData.seriousness.confidence)
-                  )}>
-                    {Math.round(extractedData.seriousness.confidence * 100)}% confident
-                  </span>
+                  {extractedData.severity?.found && (
+                    <span className={cn(
+                      'px-2 py-1 rounded-full text-xs font-medium',
+                      getConfidenceColor(extractedData.severity.confidence)
+                    )}>
+                      {Math.round(extractedData.severity.confidence * 100)}% confident
+                    </span>
+                  )}
                 </div>
 
-                {/* Reporter Type & Patient Info */}
+                {/* Reporter & Patient */}
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/30">
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground mb-1">Reporter Type</p>
                       <p className="font-medium text-foreground">
-                        {extractedData.reporterType.value === 'hcp' ? 'Healthcare Professional' : 'Patient'}
+                        {extractedData.reporter_type?.found && extractedData.reporter_type?.value === 'hcp' 
+                          ? 'Healthcare Professional' 
+                          : extractedData.reporter_type?.value === 'patient'
+                          ? 'Patient'
+                          : 'Not specified'}
                       </p>
                     </div>
-                    <span className={cn(
-                      'px-2 py-1 rounded-full text-xs font-medium',
-                      getConfidenceColor(extractedData.reporterType.confidence)
-                    )}>
-                      {Math.round(extractedData.reporterType.confidence * 100)}%
-                    </span>
+                    {extractedData.reporter_type?.found && (
+                      <span className={cn(
+                        'px-2 py-1 rounded-full text-xs font-medium',
+                        getConfidenceColor(extractedData.reporter_type.confidence)
+                      )}>
+                        {Math.round(extractedData.reporter_type.confidence * 100)}%
+                      </span>
+                    )}
                   </div>
 
-                  {extractedData.patientAge && (
+                  {extractedData.patient_demographics && (
                     <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/30">
                       <div className="flex-1">
                         <p className="text-sm text-muted-foreground mb-1">Patient Demographics</p>
-                        <p className="font-medium text-foreground">{extractedData.patientAge.value}</p>
+                        <p className="font-medium text-foreground">
+                          {extractedData.patient_demographics.found && extractedData.patient_demographics.value 
+                            ? extractedData.patient_demographics.value 
+                            : 'Not specified'}
+                        </p>
                       </div>
-                      <span className={cn(
-                        'px-2 py-1 rounded-full text-xs font-medium',
-                        getConfidenceColor(extractedData.patientAge.confidence)
-                      )}>
-                        {Math.round(extractedData.patientAge.confidence * 100)}%
-                      </span>
+                      {extractedData.patient_demographics.found && (
+                        <span className={cn(
+                          'px-2 py-1 rounded-full text-xs font-medium',
+                          getConfidenceColor(extractedData.patient_demographics.confidence)
+                        )}>
+                          {Math.round(extractedData.patient_demographics.confidence * 100)}%
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
+
+                {/* Missing Fields Summary */}
+                {missingFields.filter(f => !f.available).length > 0 && (
+                  <div className="p-4 rounded-lg bg-warning/5 border border-warning/20">
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      {missingFields.filter(f => !f.available).length} fields not found in narrative
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {missingFields.filter(f => !f.available).map((field) => (
+                        <span 
+                          key={field.field}
+                          className={cn(
+                            'px-2 py-1 rounded-full text-xs font-medium',
+                            field.priority === 'critical' ? 'bg-risk-high/10 text-risk-high' :
+                            field.priority === 'important' ? 'bg-warning/10 text-warning' :
+                            'bg-muted text-muted-foreground'
+                          )}
+                        >
+                          {field.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
