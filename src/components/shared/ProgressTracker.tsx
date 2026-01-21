@@ -9,13 +9,14 @@ interface ProgressTrackerProps {
 
 const steps: { status: CaseStatus; label: string }[] = [
   { status: 'intake', label: 'Intake' },
-  { status: 'risk_classified', label: 'Risk Classified' },
+  { status: 'risk_classified', label: 'Triage' },
   { status: 'followup_sent', label: 'Follow-up Sent' },
-  { status: 'response_received', label: 'Response Received' },
+  { status: 'response_received', label: 'Response Ingested' },
+  { status: 'ready_for_review', label: 'Ready for Review' },
   { status: 'closed', label: 'Closed' },
 ];
 
-const statusOrder: CaseStatus[] = ['intake', 'risk_classified', 'followup_sent', 'response_received', 'closed'];
+const statusOrder: CaseStatus[] = ['intake', 'risk_classified', 'followup_sent', 'response_received', 'ready_for_review', 'closed'];
 
 export function ProgressTracker({ currentStatus, className }: ProgressTrackerProps) {
   const currentIndex = statusOrder.indexOf(currentStatus);

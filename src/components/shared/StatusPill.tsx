@@ -28,6 +28,11 @@ const statusConfig: Record<CaseStatus, { label: string; icon: React.ElementType;
     icon: MessageSquare,
     classes: 'bg-accent/10 text-accent',
   },
+  ready_for_review: {
+    label: 'Ready for Review',
+    icon: BarChart3,
+    classes: 'bg-primary/10 text-primary',
+  },
   closed: {
     label: 'Closed',
     icon: CheckCircle2,
