@@ -1,1 +1,10 @@
 project_id = "abrdxtiokknstrvjmgcy"
+
+[functions.extract-icsr]
+verify_jwt = false
+
+[functions.generate-questions]
+verify_jwt = false
+
+[functions.adapt-outreach]
+verify_jwt = false

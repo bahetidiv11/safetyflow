@@ -14,6 +14,7 @@ import QuestionBuilder from "./pages/QuestionBuilder";
 import OutreachPreview from "./pages/OutreachPreview";
 import ReporterInbox from "./pages/ReporterInbox";
 import ReporterForm from "./pages/ReporterForm";
+import ImpactDashboard from "./pages/ImpactDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard/impact" element={<ImpactDashboard />} />
             <Route path="/intake" element={<CaseIntake />} />
             <Route path="/case/:id/risk" element={<RiskStratification />} />
             <Route path="/case/:id/consent" element={<ConsentCheck />} />
