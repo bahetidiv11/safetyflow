@@ -14,66 +14,20 @@ import { Header } from '../components/layout/Header';
 import { RiskBadge } from '../components/shared/RiskBadge';
 import { StatusPill } from '../components/shared/StatusPill';
 import { useApp } from '../contexts/AppContext';
-import { ICSRCase, RiskLevel, CaseStatus } from '../types/icsr';
-
-// Mock cases with the new structure for display
-interface DisplayCase {
-  id: string;
-  caseNumber: string;
-  suspectDrug: string;
-  adverseEvent: string;
-  reporterType: 'hcp' | 'patient';
-  riskLevel: RiskLevel;
-  riskScore: number;
-  status: CaseStatus;
-}
-
-const mockDisplayCases: DisplayCase[] = [
-  {
-    id: '1',
-    caseNumber: 'ICSR-2024-0847',
-    suspectDrug: 'Pembrolizumab',
-    adverseEvent: 'Severe hepatotoxicity',
-    reporterType: 'hcp',
-    riskLevel: 'high',
-    riskScore: 87,
-    status: 'risk_classified',
-  },
-  {
-    id: '2',
-    caseNumber: 'ICSR-2024-0846',
-    suspectDrug: 'Adalimumab',
-    adverseEvent: 'Injection site reaction',
-    reporterType: 'patient',
-    riskLevel: 'low',
-    riskScore: 24,
-    status: 'followup_sent',
-  },
-  {
-    id: '3',
-    caseNumber: 'ICSR-2024-0845',
-    suspectDrug: 'Nivolumab',
-    adverseEvent: 'Pneumonitis',
-    reporterType: 'hcp',
-    riskLevel: 'medium',
-    riskScore: 62,
-    status: 'response_received',
-  },
-  {
-    id: '4',
-    caseNumber: 'ICSR-2024-0844',
-    suspectDrug: 'Trastuzumab',
-    adverseEvent: 'Cardiotoxicity',
-    reporterType: 'hcp',
-    riskLevel: 'high',
-    riskScore: 91,
-    status: 'intake',
-  },
-];
+import type { RiskLevel } from '../types/icsr';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { metrics } = useApp();
+  const { metrics, cases } = useApp();
+
+  const recentCases = cases.slice(0, 8);
+
+  const toRiskLevel = (riskScore: unknown): RiskLevel => {
+    const v = String(riskScore || '').toLowerCase();
+    if (v === 'high') return 'high';
+    if (v === 'medium') return 'medium';
+    return 'low';
+  };
 
   const metricCards = [
     {
@@ -199,31 +153,35 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {mockDisplayCases.map((caseItem) => (
+                 {recentCases.map((caseItem) => (
                   <tr 
-                    key={caseItem.id} 
+                     key={String(caseItem.id)} 
                     className="hover:bg-muted/30 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/case/${caseItem.id}/risk`)}
+                     onClick={() => navigate(`/case/${caseItem.id}/risk`)}
                   >
                     <td className="px-4 py-4">
-                      <span className="font-medium text-foreground">{caseItem.caseNumber}</span>
+                       <span className="font-medium text-foreground">{String(caseItem.id)}</span>
                     </td>
                     <td className="px-4 py-4">
                       <div>
-                        <p className="font-medium text-foreground">{caseItem.suspectDrug}</p>
-                        <p className="text-sm text-muted-foreground">{caseItem.adverseEvent}</p>
+                         <p className="font-medium text-foreground">{String(caseItem.suspect_drug || '—')}</p>
+                         <p className="text-sm text-muted-foreground">{String(caseItem.adverse_event || '—')}</p>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-sm text-muted-foreground capitalize">
-                        {caseItem.reporterType === 'hcp' ? 'Healthcare Professional' : 'Patient'}
+                         {String(caseItem.reporter_type || '').toLowerCase() === 'hcp'
+                           ? 'Healthcare Professional'
+                           : String(caseItem.reporter_type || '').toLowerCase() === 'patient'
+                           ? 'Patient'
+                           : '—'}
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <RiskBadge level={caseItem.riskLevel} size="sm" />
+                       <RiskBadge level={toRiskLevel(caseItem.risk_score)} size="sm" />
                     </td>
                     <td className="px-4 py-4">
-                      <StatusPill status={caseItem.status} size="sm" />
+                       <StatusPill status={(String(caseItem.status || 'intake') as any)} size="sm" />
                     </td>
                     <td className="px-4 py-4 text-right">
                       <Button variant="ghost" size="sm">
@@ -237,6 +195,12 @@ export default function Dashboard() {
             </table>
           </div>
         </div>
+
+          {cases.length === 0 && (
+            <div className="mt-4 text-sm text-muted-foreground">
+              Ready for first case.
+            </div>
+          )}
       </main>
     </div>
   );

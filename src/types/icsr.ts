@@ -4,6 +4,24 @@ export type CaseStatus = 'intake' | 'risk_classified' | 'followup_sent' | 'respo
 export type ContactChannel = 'email' | 'whatsapp' | 'portal';
 export type QuestionInputType = 'text' | 'select' | 'date' | 'multiselect' | 'drug_search';
 
+// DB row shape for the external "cases" table (kept flexible to match different schemas)
+export interface CaseRow {
+  id: string | number;
+  created_at?: string;
+  extraction_completed_at?: string | null;
+
+  // Core PV fields (expected)
+  narrative_text?: string | null;
+  suspect_drug?: string | null;
+  adverse_event?: string | null;
+  reporter_type?: string | null;
+  status?: string | null;
+  risk_score?: string | null; // 'High' | 'Medium' | 'Low' (string per user spec)
+
+  // Optional: store raw AI output or other columns without breaking the app
+  [key: string]: unknown;
+}
+
 export interface ExtractedField {
   value: string | null;
   confidence: number;

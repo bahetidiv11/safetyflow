@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback } from 'react';
 import { 
   ICSRCase, 
   DashboardMetrics, 
@@ -9,8 +9,10 @@ import {
   FollowUpQuestion,
   RiskLevel,
   ReporterResponse,
-  OutreachMessage
+  OutreachMessage,
+  CaseRow
 } from '../types/icsr';
+import { externalSupabase } from '../lib/externalSupabase';
 
 export type UserRole = 'pv_analyst' | 'reporter' | null;
 
@@ -21,8 +23,8 @@ interface AppState {
   setIsAuthenticated: (auth: boolean) => void;
   currentCase: ICSRCase | null;
   setCurrentCase: (caseData: ICSRCase | null) => void;
-  cases: ICSRCase[];
-  setCases: (cases: ICSRCase[]) => void;
+  cases: CaseRow[];
+  setCases: (cases: CaseRow[]) => void;
   metrics: DashboardMetrics;
   
   // Dynamic state update functions
@@ -38,15 +40,6 @@ interface AppState {
   resetCurrentCase: () => void;
   initializeNewCase: (narrative: string) => void;
 }
-
-const defaultMetrics: DashboardMetrics = {
-  totalCases: 47,
-  highRiskCases: 8,
-  pendingFollowups: 12,
-  firstTouchSuccess: 78,
-  averageResponseTime: '2.3 days',
-  reducedFU2Cases: 34,
-};
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -162,8 +155,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<UserRole>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentCase, setCurrentCase] = useState<ICSRCase | null>(null);
-  const [cases, setCases] = useState<ICSRCase[]>([]);
-  const [metrics] = useState<DashboardMetrics>(defaultMetrics);
+  const [cases, setCases] = useState<CaseRow[]>([]);
+
+  // Derived dashboard metrics from live cases (defensive defaults)
+  const metrics: DashboardMetrics = useMemo(() => {
+    const total = cases.length;
+    const high = cases.filter((c) => String(c.risk_score || '').toLowerCase() === 'high').length;
+
+    return {
+      totalCases: total,
+      highRiskCases: high,
+      pendingFollowups: cases.filter((c) => String(c.status || '').toLowerCase().includes('follow')).length,
+      // Keep existing KPIs stable until explicitly backed by DB columns
+      firstTouchSuccess: 78,
+      averageResponseTime: '2.3 days',
+      reducedFU2Cases: 34,
+    };
+  }, [cases]);
+
+  // Live DB sync (initial fetch + realtime updates)
+  useEffect(() => {
+    let channel: ReturnType<typeof externalSupabase.channel> | null = null;
+    let isMounted = true;
+
+    const upsertRow = (row: CaseRow) => {
+      setCases((prev) => {
+        const id = String(row.id);
+        const existingIdx = prev.findIndex((c) => String(c.id) === id);
+        if (existingIdx >= 0) {
+          const next = [...prev];
+          next[existingIdx] = { ...next[existingIdx], ...row };
+          return next;
+        }
+        return [row, ...prev];
+      });
+    };
+
+    (async () => {
+      const { data, error } = await externalSupabase
+        .from('cases')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!isMounted) return;
+      if (!error && Array.isArray(data)) setCases(data as CaseRow[]);
+
+      channel = externalSupabase
+        .channel('cases-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'cases' },
+          (payload) => {
+            const next = (payload.new || payload.old) as CaseRow | undefined;
+            if (next) upsertRow(next);
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      isMounted = false;
+      if (channel) externalSupabase.removeChannel(channel);
+    };
+  }, []);
 
   const initializeNewCase = useCallback((narrative: string) => {
     const newCase: ICSRCase = {
