@@ -9,11 +9,13 @@ export interface CaseRow {
   id: string | number;
   created_at?: string;
   extraction_completed_at?: string | null;
+  completed_at?: string | null;
 
   // Core PV fields (expected)
-  narrative_text?: string | null;
+  narrative?: string | null;
   suspect_drug?: string | null;
   adverse_event?: string | null;
+  meddra_pt?: string | null;
   reporter_type?: string | null;
   status?: string | null;
   risk_score?: string | null; // 'High' | 'Medium' | 'Low' (string per user spec)
