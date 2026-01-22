@@ -27,7 +27,14 @@ Patient is currently recovering but remains hospitalised. The reporter (treating
 
 export default function CaseIntake() {
   const navigate = useNavigate();
-  const { initializeNewCase, updateCaseExtraction, updateCaseRiskAnalysis, currentCase, setCurrentCase } = useApp();
+  const {
+    initializeNewCase,
+    updateCaseExtraction,
+    updateCaseRiskAnalysis,
+    currentCase,
+    setCurrentCase,
+    setCases,
+  } = useApp();
   const [narrative, setNarrative] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState<AIExtractedData | null>(null);
@@ -38,8 +45,9 @@ export default function CaseIntake() {
     if (!narrative.trim()) return;
     
     setIsExtracting(true);
-    const createdAtIso = new Date().toISOString();
-    setCaseCreatedAt(createdAtIso);
+    // Keep this for UI/diagnostics if needed, but the DB timestamps are set at extraction completion per spec.
+    const startedAtIso = new Date().toISOString();
+    setCaseCreatedAt(startedAtIso);
     
     try {
       const { data, error } = await supabase.functions.invoke('extract-icsr', {
@@ -67,20 +75,37 @@ export default function CaseIntake() {
 
        // Immediately persist to external live DB (closed-loop ingestion)
        try {
-         const extractionCompletedAtIso = new Date().toISOString();
+         const finishedAtIso = new Date().toISOString();
          const risk = calculateRisk(data.extractedData, data.missingFieldsDetailed);
          const riskScoreLabel = risk.level === 'high' ? 'High' : risk.level === 'medium' ? 'Medium' : 'Low';
 
-         await externalSupabase.from('cases').insert({
-           created_at: createdAtIso,
-           extraction_completed_at: extractionCompletedAtIso,
-           narrative_text: narrative,
-           suspect_drug: data.extractedData?.suspect_drug?.value ?? null,
-           adverse_event: data.extractedData?.adverse_event?.value ?? null,
-           reporter_type: data.extractedData?.reporter_type?.value ?? null,
+         const payload = {
+           // Exact keys required by the live cases table schema
            status: 'intake',
            risk_score: riskScoreLabel,
-         });
+           suspect_drug: data.extractedData?.suspect_drug?.value ?? null,
+           adverse_event: data.extractedData?.adverse_event?.value ?? null,
+           meddra_pt: data.extractedData?.adverse_event?.meddra_pt ?? null,
+           reporter_type: data.extractedData?.reporter_type?.value ?? null,
+           narrative: narrative || null,
+           created_at: finishedAtIso,
+           extraction_completed_at: finishedAtIso,
+           // Default to finishedAtIso to satisfy NOT NULL constraints; set to null later if your schema allows it.
+           completed_at: finishedAtIso,
+         };
+
+         const { error: insertError } = await externalSupabase.from('cases').insert([payload]);
+         if (insertError) {
+           console.error('Full Supabase Error:', insertError);
+           alert('Save failed: ' + insertError.message);
+         } else {
+           // Force immediate UI refresh (in addition to realtime), so the dashboard count updates without waiting.
+           const { data: refreshed, error: refreshError } = await externalSupabase
+             .from('cases')
+             .select('*')
+             .order('created_at', { ascending: false });
+           if (!refreshError && Array.isArray(refreshed)) setCases(refreshed as any);
+         }
        } catch (e) {
          // DB write is best-effort; keep the UI flow unblocked.
          console.warn('External DB insert failed:', e);
