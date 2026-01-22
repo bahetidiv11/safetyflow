@@ -16,6 +16,7 @@ import { useApp, calculateRisk } from '../contexts/AppContext';
 import { AIExtractedData, MissingField } from '../types/icsr';
 import { cn } from '../lib/utils';
 import { supabase } from '../integrations/supabase/client';
+import { externalSupabase } from '../lib/externalSupabase';
 import { toast } from 'sonner';
 
 const sampleNarrative = `A 67-year-old male patient with metastatic melanoma was treated with pembrolizumab 200mg IV every 3 weeks. After the 4th infusion, the patient developed progressive fatigue, jaundice, and abdominal discomfort. Laboratory tests revealed ALT 890 U/L (normal <40), AST 720 U/L (normal <35), and total bilirubin 8.2 mg/dL.
@@ -31,11 +32,14 @@ export default function CaseIntake() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState<AIExtractedData | null>(null);
   const [missingFields, setMissingFields] = useState<MissingField[]>([]);
+  const [caseCreatedAt, setCaseCreatedAt] = useState<string | null>(null);
 
   const handleExtract = async () => {
     if (!narrative.trim()) return;
     
     setIsExtracting(true);
+    const createdAtIso = new Date().toISOString();
+    setCaseCreatedAt(createdAtIso);
     
     try {
       const { data, error } = await supabase.functions.invoke('extract-icsr', {
@@ -60,6 +64,27 @@ export default function CaseIntake() {
       
       // Initialize the case with narrative
       initializeNewCase(narrative);
+
+       // Immediately persist to external live DB (closed-loop ingestion)
+       try {
+         const extractionCompletedAtIso = new Date().toISOString();
+         const risk = calculateRisk(data.extractedData, data.missingFieldsDetailed);
+         const riskScoreLabel = risk.level === 'high' ? 'High' : risk.level === 'medium' ? 'Medium' : 'Low';
+
+         await externalSupabase.from('cases').insert({
+           created_at: createdAtIso,
+           extraction_completed_at: extractionCompletedAtIso,
+           narrative_text: narrative,
+           suspect_drug: data.extractedData?.suspect_drug?.value ?? null,
+           adverse_event: data.extractedData?.adverse_event?.value ?? null,
+           reporter_type: data.extractedData?.reporter_type?.value ?? null,
+           status: 'intake',
+           risk_score: riskScoreLabel,
+         });
+       } catch (e) {
+         // DB write is best-effort; keep the UI flow unblocked.
+         console.warn('External DB insert failed:', e);
+       }
       
       toast.success('Data extracted successfully!');
     } catch (err) {

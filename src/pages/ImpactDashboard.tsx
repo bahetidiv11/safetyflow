@@ -7,12 +7,7 @@ import { ProgressTracker } from '../components/shared/ProgressTracker';
 import { useApp } from '../contexts/AppContext';
 import { cn } from '../lib/utils';
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-
-const efficiencyData = [
-  { name: 'Traditional', days: 14, fill: 'hsl(var(--muted-foreground))' },
-  { name: 'SafetyFlow', days: 1, fill: 'hsl(var(--accent))' },
-];
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 
 const SYSTEM_PROMPT_PREVIEW = `You are an expert pharmacovigilance analyst extracting structured safety data from ICSR narratives following ICH E2B(R3) standards.
 
@@ -26,8 +21,47 @@ SERIOUSNESS CLASSIFICATION (ICH E2B R3):
 
 export default function ImpactDashboard() {
   const navigate = useNavigate();
-  const { currentCase } = useApp();
+  const { currentCase, cases } = useApp();
   const [showPrompt, setShowPrompt] = useState(false);
+
+  const toSeconds = (iso?: unknown) => {
+    const s = typeof iso === 'string' ? iso : '';
+    const ms = Date.parse(s);
+    return Number.isFinite(ms) ? ms / 1000 : null;
+  };
+
+  const baselineTraditionalSeconds = 1209600; // 14 days
+  const baselineImmediateTriageSeconds = 7200; // 2 hours
+
+  const completedDurationsSeconds = cases
+    .map((c) => {
+      const created = toSeconds(c.created_at);
+      const done = toSeconds(c.extraction_completed_at);
+      if (created == null || done == null) return null;
+      return Math.max(0, done - created);
+    })
+    .filter((v): v is number => typeof v === 'number');
+
+  const avgSafetyFlowSeconds = completedDurationsSeconds.length
+    ? completedDurationsSeconds.reduce((a, b) => a + b, 0) / completedDurationsSeconds.length
+    : 0;
+
+  const hoursReclaimed = completedDurationsSeconds.length
+    ? completedDurationsSeconds.reduce((sum, s) => sum + Math.max(0, (baselineTraditionalSeconds - s) / 3600), 0)
+    : 0;
+
+  const efficiencyData = [
+    { name: 'Traditional', seconds: baselineTraditionalSeconds, fill: 'hsl(var(--muted-foreground))' },
+    { name: 'SafetyFlow', seconds: avgSafetyFlowSeconds, fill: 'hsl(var(--accent))' },
+  ];
+
+  const fmtDuration = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return '0';
+    if (seconds >= 86400) return `${Math.round(seconds / 86400)}d`;
+    if (seconds >= 3600) return `${Math.round(seconds / 3600)}h`;
+    if (seconds >= 60) return `${Math.round(seconds / 60)}m`;
+    return `${Math.round(seconds)}s`;
+  };
 
   const timelineSteps = [
     { id: 'intake', label: 'Intake', status: currentCase?.status ? 'completed' : 'pending' },
@@ -81,9 +115,9 @@ export default function ImpactDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={efficiencyData} layout="vertical" margin={{ left: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" domain={[0, 16]} tickFormatter={(v) => `${v}d`} />
+                <XAxis type="number" domain={[0, baselineTraditionalSeconds]} tickFormatter={(v) => fmtDuration(Number(v))} />
                 <YAxis type="category" dataKey="name" />
-                <Bar dataKey="days" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="seconds" radius={[0, 4, 4, 0]}>
                   {efficiencyData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
@@ -92,8 +126,8 @@ export default function ImpactDashboard() {
             </ResponsiveContainer>
           </div>
           <div className="flex justify-center gap-8 mt-4">
-            <div className="text-center"><p className="text-2xl font-bold text-muted-foreground">14 days</p><p className="text-xs text-muted-foreground">Traditional</p></div>
-            <div className="text-center"><p className="text-2xl font-bold text-accent">&lt;24 hours</p><p className="text-xs text-muted-foreground">SafetyFlow</p></div>
+            <div className="text-center"><p className="text-2xl font-bold text-muted-foreground">14 days</p><p className="text-xs text-muted-foreground">Traditional baseline</p></div>
+            <div className="text-center"><p className="text-2xl font-bold text-accent">{fmtDuration(avgSafetyFlowSeconds)}</p><p className="text-xs text-muted-foreground">SafetyFlow avg</p></div>
           </div>
         </div>
 
@@ -101,18 +135,18 @@ export default function ImpactDashboard() {
         <div className="grid sm:grid-cols-3 gap-4 mb-8">
           <div className="card-elevated p-4 text-center">
             <Zap className="h-8 w-8 text-accent mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground">78%</p>
-            <p className="text-sm text-muted-foreground">First-touch success</p>
+            <p className="text-2xl font-bold text-foreground">{Math.round(hoursReclaimed)}</p>
+            <p className="text-sm text-muted-foreground">Hours reclaimed</p>
           </div>
           <div className="card-elevated p-4 text-center">
             <Clock className="h-8 w-8 text-success mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground">2.3 hrs</p>
-            <p className="text-sm text-muted-foreground">Avg response time</p>
+            <p className="text-2xl font-bold text-foreground">{fmtDuration(avgSafetyFlowSeconds)}</p>
+            <p className="text-sm text-muted-foreground">Avg SafetyFlow processing</p>
           </div>
           <div className="card-elevated p-4 text-center">
             <TrendingDown className="h-8 w-8 text-warning mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground">-34%</p>
-            <p className="text-sm text-muted-foreground">FU2/TFUC reduction</p>
+            <p className="text-2xl font-bold text-foreground">{fmtDuration(baselineImmediateTriageSeconds)}</p>
+            <p className="text-sm text-muted-foreground">Immediate triage baseline</p>
           </div>
         </div>
 
