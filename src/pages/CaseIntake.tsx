@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   FileText, 
@@ -7,7 +7,9 @@ import {
   AlertCircle,
   ArrowRight,
   Loader2,
-  ChevronDown
+  ChevronDown,
+  Upload,
+  FileUp
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
@@ -19,11 +21,15 @@ import { supabase } from '../integrations/supabase/client';
 import { externalSupabase } from '../lib/externalSupabase';
 import { toast } from 'sonner';
 
-const sampleNarrative = `A 67-year-old male patient with metastatic melanoma was treated with pembrolizumab 200mg IV every 3 weeks. After the 4th infusion, the patient developed progressive fatigue, jaundice, and abdominal discomfort. Laboratory tests revealed ALT 890 U/L (normal <40), AST 720 U/L (normal <35), and total bilirubin 8.2 mg/dL.
+const sampleNarrative = `A 72-year-old male patient on chronic anticoagulation therapy with rivaroxaban 20mg once daily for atrial fibrillation presented to the emergency department with melena and hematemesis. 
 
-The patient was hospitalised and pembrolizumab was permanently discontinued. IV methylprednisolone was initiated. The treating oncologist considers this event to be drug-related immune-mediated hepatitis.
+On examination, the patient was hypotensive (BP 85/55 mmHg) and tachycardic (HR 112 bpm). Laboratory workup revealed hemoglobin of 7.2 g/dL (baseline 13.5 g/dL) and INR of 1.8. 
 
-Patient is currently recovering but remains hospitalised. The reporter (treating physician Dr. Smith) has consented to follow-up contact via email.`;
+Emergency upper endoscopy revealed a large gastric ulcer with active oozing. Rivaroxaban was immediately discontinued. The patient received 3 units of packed red blood cells and was started on IV proton pump inhibitor therapy.
+
+The treating gastroenterologist considers this a serious adverse drug reaction - hospitalization required, life-threatening due to hemorrhagic shock. The patient has a history of prior GI bleed 5 years ago on aspirin. 
+
+Reporter: Dr. Sarah Chen, Gastroenterology Fellow. Contact: s.chen@hospital.edu. Consented for follow-up.`;
 
 export default function CaseIntake() {
   const navigate = useNavigate();
@@ -40,12 +46,57 @@ export default function CaseIntake() {
   const [extractedData, setExtractedData] = useState<AIExtractedData | null>(null);
   const [missingFields, setMissingFields] = useState<MissingField[]>([]);
   const [caseCreatedAt, setCaseCreatedAt] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    
+    // Check file type
+    const allowedTypes = ['text/plain', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type) && !file.name.endsWith('.txt')) {
+      toast.error('Please upload a .txt, .pdf, or .doc/.docx file');
+      return;
+    }
+
+    try {
+      // For text files, read directly
+      if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+        const text = await file.text();
+        setNarrative(text);
+        setExtractedData(null);
+        setMissingFields([]);
+        toast.success('Document loaded successfully');
+      } else {
+        // For other formats, show a placeholder message
+        toast.info('PDF/Word parsing coming soon. Please paste text directly for now.');
+      }
+    } catch (err) {
+      console.error('File read error:', err);
+      toast.error('Failed to read file');
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
 
   const handleExtract = async () => {
     if (!narrative.trim()) return;
     
     setIsExtracting(true);
-    // Keep this for UI/diagnostics if needed, but the DB timestamps are set at extraction completion per spec.
     const startedAtIso = new Date().toISOString();
     setCaseCreatedAt(startedAtIso);
     
@@ -80,7 +131,6 @@ export default function CaseIntake() {
          const riskScoreLabel = risk.level === 'high' ? 'High' : risk.level === 'medium' ? 'Medium' : 'Low';
 
          const payload = {
-           // Exact keys required by the live cases table schema
            status: 'intake',
            risk_score: riskScoreLabel,
            suspect_drug: data.extractedData?.suspect_drug?.value ?? null,
@@ -90,7 +140,6 @@ export default function CaseIntake() {
            narrative: narrative || null,
            created_at: finishedAtIso,
            extraction_completed_at: finishedAtIso,
-           // Default to finishedAtIso to satisfy NOT NULL constraints; set to null later if your schema allows it.
            completed_at: finishedAtIso,
          };
 
@@ -99,7 +148,6 @@ export default function CaseIntake() {
            console.error('Full Supabase Error:', insertError);
            alert('Save failed: ' + insertError.message);
          } else {
-           // Force immediate UI refresh (in addition to realtime), so the dashboard count updates without waiting.
            const { data: refreshed, error: refreshError } = await externalSupabase
              .from('cases')
              .select('*')
@@ -107,7 +155,6 @@ export default function CaseIntake() {
            if (!refreshError && Array.isArray(refreshed)) setCases(refreshed as any);
          }
        } catch (e) {
-         // DB write is best-effort; keep the UI flow unblocked.
          console.warn('External DB insert failed:', e);
        }
       
@@ -123,10 +170,7 @@ export default function CaseIntake() {
   const handleProceed = () => {
     if (!extractedData || !currentCase) return;
     
-    // Update case with extracted data and missing fields
     updateCaseExtraction(extractedData, missingFields);
-    
-    // Calculate and set risk analysis
     const riskAnalysis = calculateRisk(extractedData, missingFields);
     updateCaseRiskAnalysis(riskAnalysis);
     
@@ -137,6 +181,7 @@ export default function CaseIntake() {
     setNarrative(sampleNarrative);
     setExtractedData(null);
     setMissingFields([]);
+    toast.success('Sample ICSR loaded');
   };
 
   const getConfidenceColor = (confidence: number) => {
@@ -192,12 +237,45 @@ export default function CaseIntake() {
           </p>
         </div>
 
+        {/* Document Upload Area */}
+        <div
+          className={cn(
+            "card-elevated p-6 mb-4 border-2 border-dashed transition-colors cursor-pointer",
+            isDragOver ? "border-accent bg-accent/5" : "border-border hover:border-muted-foreground"
+          )}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.pdf,.doc,.docx"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileUpload(file);
+            }}
+          />
+          <div className="flex flex-col items-center justify-center py-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted mb-3">
+              <Upload className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="font-medium text-foreground mb-1">Upload Document</p>
+            <p className="text-sm text-muted-foreground text-center">
+              Drag & drop a .txt, .pdf, or .docx file, or click to browse
+            </p>
+          </div>
+        </div>
+
         {/* Narrative Input */}
         <div className="card-elevated p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <label className="font-medium text-foreground">Case Narrative</label>
-            <Button variant="ghost" size="sm" onClick={loadSample}>
-              Load sample narrative
+            <Button variant="outline" size="sm" onClick={loadSample}>
+              <FileUp className="h-4 w-4 mr-1" />
+              Load Sample ICSR
             </Button>
           </div>
           <Textarea

@@ -387,8 +387,8 @@ export default function QuestionBuilder() {
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3 justify-end">
-          <Button variant="outline" onClick={() => navigate('/case/new/missing')}>
-            Back
+          <Button variant="outline" onClick={() => navigate('/dashboard')}>
+            Back to Dashboard
           </Button>
           <Button 
             variant="hero" 
