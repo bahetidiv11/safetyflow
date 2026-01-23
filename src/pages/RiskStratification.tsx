@@ -201,7 +201,7 @@ export default function RiskStratification() {
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3 justify-end">
           <Button variant="outline" onClick={() => navigate('/dashboard')}>
-            Return to Dashboard
+            Back to Dashboard
           </Button>
           <Button variant="hero" onClick={() => navigate('/case/new/consent')}>
             Check Consent & Eligibility

@@ -1,9 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
-import { CheckCircle, Clock, Zap, ArrowRight, TrendingDown, Eye, Code } from 'lucide-react';
+import { CheckCircle, Clock, Zap, ArrowRight, TrendingDown, Code } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Header } from '../components/layout/Header';
-import { ProgressTracker } from '../components/shared/ProgressTracker';
 import { useApp } from '../contexts/AppContext';
 import { cn } from '../lib/utils';
 import { useState } from 'react';
@@ -19,56 +18,77 @@ SERIOUSNESS CLASSIFICATION (ICH E2B R3):
 - Fatal, Life-threatening, Hospitalization, Disability
 - Congenital Anomaly, Medically Significant`;
 
+const BASELINE_MINUTES = 120; // Traditional baseline: 2 hours (120 min)
+
 export default function ImpactDashboard() {
   const navigate = useNavigate();
   const { currentCase, cases } = useApp();
   const [showPrompt, setShowPrompt] = useState(false);
 
-  const toSeconds = (iso?: unknown) => {
+  const toMs = (iso?: unknown): number | null => {
     const s = typeof iso === 'string' ? iso : '';
     const ms = Date.parse(s);
-    return Number.isFinite(ms) ? ms / 1000 : null;
+    return Number.isFinite(ms) ? ms : null;
   };
 
-  const baselineTraditionalSeconds = 1209600; // 14 days
-  const baselineImmediateTriageSeconds = 7200; // 2 hours
-
-  const completedDurationsSeconds = cases
+  // Calculate processing times for each case in minutes
+  const processingTimesMinutes = cases
     .map((c) => {
-      const created = toSeconds(c.created_at);
-      const done = toSeconds(c.extraction_completed_at);
+      const created = toMs(c.created_at);
+      const done = toMs(c.extraction_completed_at);
       if (created == null || done == null) return null;
-      return Math.max(0, done - created);
+      return Math.max(0, (done - created) / 60000); // ms to minutes
     })
     .filter((v): v is number => typeof v === 'number');
 
-  const avgSafetyFlowSeconds = completedDurationsSeconds.length
-    ? completedDurationsSeconds.reduce((a, b) => a + b, 0) / completedDurationsSeconds.length
+  // Average SafetyFlow processing time in minutes
+  const avgSafetyFlowMinutes = processingTimesMinutes.length
+    ? processingTimesMinutes.reduce((a, b) => a + b, 0) / processingTimesMinutes.length
     : 0;
 
-  const hoursReclaimed = completedDurationsSeconds.length
-    ? completedDurationsSeconds.reduce((sum, s) => sum + Math.max(0, (baselineTraditionalSeconds - s) / 3600), 0)
-    : 0;
+  // Time saved per case = Baseline (120 min) - SafetyFlow time
+  // Cumulative hours reclaimed = sum of (baseline - actual) for all cases, converted to hours
+  const totalMinutesSaved = processingTimesMinutes.reduce(
+    (sum, t) => sum + Math.max(0, BASELINE_MINUTES - t),
+    0
+  );
+  const hoursReclaimed = totalMinutesSaved / 60;
 
+  // Percentage faster
+  const percentFaster = avgSafetyFlowMinutes > 0 && BASELINE_MINUTES > avgSafetyFlowMinutes
+    ? Math.round(((BASELINE_MINUTES - avgSafetyFlowMinutes) / BASELINE_MINUTES) * 100)
+    : avgSafetyFlowMinutes === 0 && processingTimesMinutes.length === 0 ? 0 : 99;
+
+  // Chart data
   const efficiencyData = [
-    { name: 'Traditional', seconds: baselineTraditionalSeconds, fill: 'hsl(var(--muted-foreground))' },
-    { name: 'SafetyFlow', seconds: avgSafetyFlowSeconds, fill: 'hsl(var(--accent))' },
+    { name: 'Traditional', minutes: BASELINE_MINUTES, fill: 'hsl(var(--muted-foreground))' },
+    { name: 'SafetyFlow', minutes: avgSafetyFlowMinutes, fill: 'hsl(var(--accent))' },
   ];
 
-  const fmtDuration = (seconds: number) => {
-    if (!Number.isFinite(seconds) || seconds <= 0) return '0';
-    if (seconds >= 86400) return `${Math.round(seconds / 86400)}d`;
-    if (seconds >= 3600) return `${Math.round(seconds / 3600)}h`;
-    if (seconds >= 60) return `${Math.round(seconds / 60)}m`;
-    return `${Math.round(seconds)}s`;
+  const fmtDuration = (minutes: number): string => {
+    if (!Number.isFinite(minutes) || minutes <= 0) return '0';
+    if (minutes >= 1440) return `${Math.round(minutes / 1440)}d`;
+    if (minutes >= 60) return `${Math.round(minutes / 60)}h`;
+    if (minutes >= 1) return `${Math.round(minutes)}m`;
+    return `${Math.round(minutes * 60)}s`;
+  };
+
+  // Timeline steps derived from currentCase state
+  const getStepStatus = (step: string): 'completed' | 'current' | 'pending' => {
+    if (!currentCase) return 'pending';
+    const statusOrder = ['intake', 'risk_classified', 'followup_sent', 'response_received', 'ready_for_review', 'closed'];
+    const currentIdx = statusOrder.indexOf(currentCase.status || 'intake');
+    const stepIdx = statusOrder.indexOf(step);
+    if (stepIdx < currentIdx) return 'completed';
+    if (stepIdx === currentIdx) return 'current';
+    return 'pending';
   };
 
   const timelineSteps = [
-    { id: 'intake', label: 'Intake', status: currentCase?.status ? 'completed' : 'pending' },
-    { id: 'triage', label: 'Triage', status: currentCase?.riskAnalysis ? 'completed' : 'pending' },
-    { id: 'followup', label: 'Follow-up Sent', status: currentCase?.sentAt ? 'completed' : 'pending' },
-    { id: 'response', label: 'Response Ingested', status: currentCase?.respondedAt ? 'completed' : 'pending' },
-    { id: 'review', label: 'Ready for Review', status: currentCase?.status === 'ready_for_review' ? 'current' : 'pending' },
+    { id: 'intake', label: 'Intake', step: 1 },
+    { id: 'risk_classified', label: 'Triage', step: 2 },
+    { id: 'followup_sent', label: 'Follow-up Sent', step: 3 },
+    { id: 'ready_for_review', label: 'Review', step: 4 },
   ];
 
   return (
@@ -80,22 +100,45 @@ export default function ImpactDashboard() {
           <p className="text-muted-foreground">Closed-loop pharmacovigilance demonstration</p>
         </div>
 
-        {/* Timeline Stepper */}
+        {/* Timeline Stepper - perfectly aligned 1-2-3-4 */}
         <div className="card-elevated p-6 mb-8">
           <h3 className="font-semibold text-foreground mb-6">Case Timeline: {currentCase?.caseNumber || 'Demo'}</h3>
-          <div className="flex items-center justify-between">
-            {timelineSteps.map((step, idx) => (
-              <div key={step.id} className="flex flex-col items-center flex-1">
-                <div className="flex items-center w-full">
-                  {idx > 0 && <div className={cn('flex-1 h-0.5', step.status !== 'pending' ? 'bg-accent' : 'bg-border')} />}
-                  <div className={cn('flex items-center justify-center w-10 h-10 rounded-full border-2', step.status === 'completed' ? 'bg-accent border-accent text-white' : step.status === 'current' ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-background text-muted-foreground')}>
-                    {step.status === 'completed' ? <CheckCircle className="w-5 h-5" /> : <span className="text-sm font-medium">{idx + 1}</span>}
+          <div className="relative flex items-center justify-between">
+            {/* Connecting line behind circles */}
+            <div className="absolute top-5 left-0 right-0 h-0.5 bg-border z-0" />
+            <div
+              className="absolute top-5 left-0 h-0.5 bg-accent z-0 transition-all duration-500"
+              style={{
+                width: `${(timelineSteps.findIndex(s => getStepStatus(s.id) !== 'completed') / (timelineSteps.length - 1)) * 100}%`,
+              }}
+            />
+
+            {timelineSteps.map((step) => {
+              const status = getStepStatus(step.id);
+              return (
+                <div key={step.id} className="relative z-10 flex flex-col items-center">
+                  <div
+                    className={cn(
+                      'flex items-center justify-center w-10 h-10 rounded-full border-2 bg-background transition-all',
+                      status === 'completed'
+                        ? 'bg-accent border-accent text-accent-foreground'
+                        : status === 'current'
+                        ? 'border-accent bg-accent/10 text-accent'
+                        : 'border-border text-muted-foreground'
+                    )}
+                  >
+                    {status === 'completed' ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      <span className="text-sm font-semibold">{step.step}</span>
+                    )}
                   </div>
-                  {idx < timelineSteps.length - 1 && <div className={cn('flex-1 h-0.5', timelineSteps[idx + 1]?.status !== 'pending' ? 'bg-accent' : 'bg-border')} />}
+                  <span className="mt-2 text-xs font-medium text-center text-muted-foreground max-w-[80px]">
+                    {step.label}
+                  </span>
                 </div>
-                <span className="mt-2 text-xs font-medium text-center text-muted-foreground">{step.label}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -104,20 +147,24 @@ export default function ImpactDashboard() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-semibold text-foreground">Processing Time Comparison</h3>
-              <p className="text-sm text-muted-foreground">Traditional vs SafetyFlow workflow</p>
+              <p className="text-sm text-muted-foreground">Traditional (120 min baseline) vs SafetyFlow</p>
             </div>
             <div className="flex items-center gap-2 text-success">
               <TrendingDown className="h-5 w-5" />
-              <span className="font-bold">93% faster</span>
+              <span className="font-bold">{percentFaster}% faster</span>
             </div>
           </div>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={efficiencyData} layout="vertical" margin={{ left: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" domain={[0, baselineTraditionalSeconds]} tickFormatter={(v) => fmtDuration(Number(v))} />
+                <XAxis
+                  type="number"
+                  domain={[0, BASELINE_MINUTES]}
+                  tickFormatter={(v) => fmtDuration(Number(v))}
+                />
                 <YAxis type="category" dataKey="name" />
-                <Bar dataKey="seconds" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="minutes" radius={[0, 4, 4, 0]}>
                   {efficiencyData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
@@ -126,8 +173,14 @@ export default function ImpactDashboard() {
             </ResponsiveContainer>
           </div>
           <div className="flex justify-center gap-8 mt-4">
-            <div className="text-center"><p className="text-2xl font-bold text-muted-foreground">14 days</p><p className="text-xs text-muted-foreground">Traditional baseline</p></div>
-            <div className="text-center"><p className="text-2xl font-bold text-accent">{fmtDuration(avgSafetyFlowSeconds)}</p><p className="text-xs text-muted-foreground">SafetyFlow avg</p></div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-muted-foreground">{fmtDuration(BASELINE_MINUTES)}</p>
+              <p className="text-xs text-muted-foreground">Traditional baseline</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-accent">{fmtDuration(avgSafetyFlowMinutes)}</p>
+              <p className="text-xs text-muted-foreground">SafetyFlow avg</p>
+            </div>
           </div>
         </div>
 
@@ -135,18 +188,20 @@ export default function ImpactDashboard() {
         <div className="grid sm:grid-cols-3 gap-4 mb-8">
           <div className="card-elevated p-4 text-center">
             <Zap className="h-8 w-8 text-accent mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground">{Math.round(hoursReclaimed)}</p>
+            <p className="text-2xl font-bold text-foreground">
+              {cases.length === 0 ? '0' : hoursReclaimed.toFixed(1)}
+            </p>
             <p className="text-sm text-muted-foreground">Hours reclaimed</p>
           </div>
           <div className="card-elevated p-4 text-center">
             <Clock className="h-8 w-8 text-success mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground">{fmtDuration(avgSafetyFlowSeconds)}</p>
+            <p className="text-2xl font-bold text-foreground">{fmtDuration(avgSafetyFlowMinutes)}</p>
             <p className="text-sm text-muted-foreground">Avg SafetyFlow processing</p>
           </div>
           <div className="card-elevated p-4 text-center">
             <TrendingDown className="h-8 w-8 text-warning mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground">{fmtDuration(baselineImmediateTriageSeconds)}</p>
-            <p className="text-sm text-muted-foreground">Immediate triage baseline</p>
+            <p className="text-2xl font-bold text-foreground">{cases.length}</p>
+            <p className="text-sm text-muted-foreground">Cases processed</p>
           </div>
         </div>
 
@@ -154,14 +209,22 @@ export default function ImpactDashboard() {
         <div className="flex flex-wrap gap-3 justify-between">
           <Dialog open={showPrompt} onOpenChange={setShowPrompt}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm"><Code className="h-4 w-4 mr-1" /> View System Prompt</Button>
+              <Button variant="outline" size="sm">
+                <Code className="h-4 w-4 mr-1" /> View System Prompt
+              </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
-              <DialogHeader><DialogTitle>Gemini System Prompt (Reproducibility)</DialogTitle></DialogHeader>
-              <pre className="bg-muted p-4 rounded-lg text-xs overflow-auto max-h-96">{SYSTEM_PROMPT_PREVIEW}</pre>
+              <DialogHeader>
+                <DialogTitle>Gemini System Prompt (Reproducibility)</DialogTitle>
+              </DialogHeader>
+              <pre className="bg-muted p-4 rounded-lg text-xs overflow-auto max-h-96">
+                {SYSTEM_PROMPT_PREVIEW}
+              </pre>
             </DialogContent>
           </Dialog>
-          <Button variant="hero" onClick={() => navigate('/dashboard')}>Return to Dashboard <ArrowRight className="h-4 w-4" /></Button>
+          <Button variant="hero" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard <ArrowRight className="h-4 w-4" />
+          </Button>
         </div>
       </main>
     </div>
