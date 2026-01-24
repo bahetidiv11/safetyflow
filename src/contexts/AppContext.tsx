@@ -157,18 +157,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentCase, setCurrentCase] = useState<ICSRCase | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
 
-  // Derived dashboard metrics from live cases (defensive defaults)
+  // Derived dashboard metrics from live cases (dynamic calculations)
   const metrics: DashboardMetrics = useMemo(() => {
     const total = cases.length;
     const high = cases.filter((c) => String(c.risk_score || '').toLowerCase() === 'high').length;
+
+    // First-Touch Success: % of cases with 'closed' or 'ready_for_review' status
+    // (proxy for cases completed without needing additional follow-ups)
+    const completedStatuses = ['closed', 'ready_for_review', 'response_received'];
+    const completedCases = cases.filter((c) => 
+      completedStatuses.includes(String(c.status || '').toLowerCase())
+    ).length;
+    const firstTouchRate = total > 0 ? Math.round((completedCases / total) * 100) : 0;
+
+    // Average Response Time: (completed_at - created_at) in human-readable format
+    const responseTimes = cases
+      .map((c) => {
+        const created = Date.parse(String(c.created_at || ''));
+        const completed = Date.parse(String(c.completed_at || ''));
+        if (Number.isFinite(created) && Number.isFinite(completed) && completed > created) {
+          return (completed - created) / 60000; // in minutes
+        }
+        return null;
+      })
+      .filter((v): v is number => v !== null);
+
+    let avgResponseTimeStr = '—';
+    if (responseTimes.length > 0) {
+      const avgMins = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
+      if (avgMins < 1) avgResponseTimeStr = `${Math.round(avgMins * 60)}s`;
+      else if (avgMins < 60) avgResponseTimeStr = `${avgMins.toFixed(1)} mins`;
+      else if (avgMins < 1440) avgResponseTimeStr = `${(avgMins / 60).toFixed(1)} hrs`;
+      else avgResponseTimeStr = `${(avgMins / 1440).toFixed(1)} days`;
+    }
 
     return {
       totalCases: total,
       highRiskCases: high,
       pendingFollowups: cases.filter((c) => String(c.status || '').toLowerCase().includes('follow')).length,
-      // Keep existing KPIs stable until explicitly backed by DB columns
-      firstTouchSuccess: 78,
-      averageResponseTime: '2.3 days',
+      firstTouchSuccess: firstTouchRate,
+      averageResponseTime: avgResponseTimeStr,
       reducedFU2Cases: 34,
     };
   }, [cases]);

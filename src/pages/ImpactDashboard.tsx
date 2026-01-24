@@ -100,45 +100,64 @@ export default function ImpactDashboard() {
           <p className="text-muted-foreground">Closed-loop pharmacovigilance demonstration</p>
         </div>
 
-        {/* Timeline Stepper - perfectly aligned 1-2-3-4 */}
+        {/* Timeline Stepper - perfectly aligned 1-2-3-4 on a straight line */}
         <div className="card-elevated p-6 mb-8">
           <h3 className="font-semibold text-foreground mb-6">Case Timeline: {currentCase?.caseNumber || 'Demo'}</h3>
-          <div className="relative flex items-center justify-between">
-            {/* Connecting line behind circles */}
-            <div className="absolute top-5 left-0 right-0 h-0.5 bg-border z-0" />
-            <div
-              className="absolute top-5 left-0 h-0.5 bg-accent z-0 transition-all duration-500"
-              style={{
-                width: `${(timelineSteps.findIndex(s => getStepStatus(s.id) !== 'completed') / (timelineSteps.length - 1)) * 100}%`,
-              }}
-            />
+          <div className="relative">
+            {/* Container for perfect horizontal alignment */}
+            <div className="flex items-start justify-between px-4">
+              {/* Background line - positioned at exact circle center (20px from top for h-10 circles) */}
+              <div 
+                className="absolute h-0.5 bg-border" 
+                style={{ top: '20px', left: '40px', right: '40px' }} 
+              />
+              {/* Progress line - blue portion based on completed steps */}
+              {(() => {
+                const completedIdx = timelineSteps.findIndex(s => getStepStatus(s.id) !== 'completed');
+                const progress = completedIdx === -1 ? 100 : (completedIdx / (timelineSteps.length - 1)) * 100;
+                return (
+                  <div 
+                    className="absolute h-0.5 bg-accent transition-all duration-500" 
+                    style={{ 
+                      top: '20px', 
+                      left: '40px', 
+                      width: `calc(${progress}% - ${progress === 100 ? 80 : 40}px)` 
+                    }} 
+                  />
+                );
+              })()}
 
-            {timelineSteps.map((step) => {
-              const status = getStepStatus(step.id);
-              return (
-                <div key={step.id} className="relative z-10 flex flex-col items-center">
-                  <div
-                    className={cn(
-                      'flex items-center justify-center w-10 h-10 rounded-full border-2 bg-background transition-all',
-                      status === 'completed'
-                        ? 'bg-accent border-accent text-accent-foreground'
-                        : status === 'current'
-                        ? 'border-accent bg-accent/10 text-accent'
-                        : 'border-border text-muted-foreground'
-                    )}
+              {timelineSteps.map((step) => {
+                const status = getStepStatus(step.id);
+                return (
+                  <div 
+                    key={step.id} 
+                    className="relative z-10 flex flex-col items-center"
+                    style={{ width: '80px' }}
                   >
-                    {status === 'completed' ? (
-                      <CheckCircle className="w-5 h-5" />
-                    ) : (
-                      <span className="text-sm font-semibold">{step.step}</span>
-                    )}
+                    <div
+                      className={cn(
+                        'flex items-center justify-center w-10 h-10 rounded-full border-2 bg-background transition-all',
+                        status === 'completed'
+                          ? 'bg-accent border-accent text-accent-foreground'
+                          : status === 'current'
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-border text-muted-foreground'
+                      )}
+                    >
+                      {status === 'completed' ? (
+                        <CheckCircle className="w-5 h-5" />
+                      ) : (
+                        <span className="text-sm font-semibold">{step.step}</span>
+                      )}
+                    </div>
+                    <span className="mt-2 text-xs font-medium text-center text-muted-foreground whitespace-nowrap">
+                      {step.label}
+                    </span>
                   </div>
-                  <span className="mt-2 text-xs font-medium text-center text-muted-foreground max-w-[80px]">
-                    {step.label}
-                  </span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
 
