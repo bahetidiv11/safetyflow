@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Shield, ArrowRight, CheckCircle, HelpCircle, Calendar } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,11 +8,13 @@ import { cn } from '../lib/utils';
 import { useApp } from '../contexts/AppContext';
 import { FollowUpQuestion, ReporterResponse } from '../types/icsr';
 import SearchableMultiSelect from '../components/shared/SearchableMultiSelect';
+import { externalSupabase } from '../lib/externalSupabase';
 import DrugSearchInput from '../components/shared/DrugSearchInput';
 
 export default function ReporterForm() {
   const navigate = useNavigate();
-  const { currentCase, mergeReporterData } = useApp();
+  const { id: caseId } = useParams<{ id: string }>();
+  const { currentCase, mergeReporterData, setCases } = useApp();
   const formQuestions = currentCase?.followUpQuestions || [];
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
@@ -33,7 +35,6 @@ export default function ReporterForm() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Create reporter responses and merge back into case data
     const responses: ReporterResponse[] = Object.entries(answers).map(([questionId, answer]) => {
@@ -42,6 +43,27 @@ export default function ReporterForm() {
     });
     
     mergeReporterData(responses);
+
+    // Update case status to 'Completed' in the database
+    if (caseId) {
+      try {
+        const completedAtIso = new Date().toISOString();
+        await externalSupabase
+          .from('cases')
+          .update({ status: 'Completed', completed_at: completedAtIso })
+          .eq('id', caseId);
+
+        // Refresh cases list
+        const { data: refreshed, error } = await externalSupabase
+          .from('cases')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!error && Array.isArray(refreshed)) setCases(refreshed as any);
+      } catch (e) {
+        console.warn('Failed to update case status:', e);
+      }
+    }
+
     setIsSubmitting(false);
     setIsSubmitted(true);
   };
