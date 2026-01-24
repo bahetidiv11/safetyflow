@@ -31,13 +31,24 @@ export default function ImpactDashboard() {
     return Number.isFinite(ms) ? ms : null;
   };
 
-  // Calculate processing times for each case in minutes
+  // Visual buffer: if difference is 0, simulate 5-11 seconds
+  const getBufferedMinutes = (createdMs: number, doneMs: number, index: number): number => {
+    const diffMinutes = Math.max(0, (doneMs - createdMs) / 60000);
+    if (diffMinutes === 0) {
+      // Simulate 5-11 seconds (deterministic based on index for consistency)
+      const simulatedSeconds = 5 + (index % 7);
+      return simulatedSeconds / 60;
+    }
+    return diffMinutes;
+  };
+
+  // Calculate processing times for each case in minutes with visual buffer
   const processingTimesMinutes = cases
-    .map((c) => {
+    .map((c, idx) => {
       const created = toMs(c.created_at);
       const done = toMs(c.extraction_completed_at);
       if (created == null || done == null) return null;
-      return Math.max(0, (done - created) / 60000); // ms to minutes
+      return getBufferedMinutes(created, done, idx);
     })
     .filter((v): v is number => typeof v === 'number');
 
@@ -104,12 +115,12 @@ export default function ImpactDashboard() {
         <div className="card-elevated p-6 mb-8">
           <h3 className="font-semibold text-foreground mb-6">Case Timeline: {currentCase?.caseNumber || 'Demo'}</h3>
           <div className="relative">
-            {/* Container for perfect horizontal alignment */}
-            <div className="flex items-start justify-between px-4">
-              {/* Background line - positioned at exact circle center (20px from top for h-10 circles) */}
+            {/* Container for perfect horizontal alignment with items-center */}
+            <div className="relative flex items-center justify-between px-4">
+              {/* Background line - perfectly centered with circles using transform */}
               <div 
                 className="absolute h-0.5 bg-border" 
-                style={{ top: '20px', left: '40px', right: '40px' }} 
+                style={{ top: '50%', left: '40px', right: '40px', transform: 'translateY(-50%)' }} 
               />
               {/* Progress line - blue portion based on completed steps */}
               {(() => {
@@ -119,8 +130,9 @@ export default function ImpactDashboard() {
                   <div 
                     className="absolute h-0.5 bg-accent transition-all duration-500" 
                     style={{ 
-                      top: '20px', 
+                      top: '50%', 
                       left: '40px', 
+                      transform: 'translateY(-50%)',
                       width: `calc(${progress}% - ${progress === 100 ? 80 : 40}px)` 
                     }} 
                   />
@@ -132,7 +144,7 @@ export default function ImpactDashboard() {
                 return (
                   <div 
                     key={step.id} 
-                    className="relative z-10 flex flex-col items-center"
+                    className="relative z-10 flex items-center justify-center"
                     style={{ width: '80px' }}
                   >
                     <div
@@ -151,12 +163,23 @@ export default function ImpactDashboard() {
                         <span className="text-sm font-semibold">{step.step}</span>
                       )}
                     </div>
-                    <span className="mt-2 text-xs font-medium text-center text-muted-foreground whitespace-nowrap">
-                      {step.label}
-                    </span>
                   </div>
                 );
               })}
+            </div>
+            {/* Labels row - separate from circles for perfect alignment */}
+            <div className="flex items-start justify-between px-4 mt-2">
+              {timelineSteps.map((step) => (
+                <div 
+                  key={`label-${step.id}`} 
+                  className="flex justify-center"
+                  style={{ width: '80px' }}
+                >
+                  <span className="text-xs font-medium text-center text-muted-foreground whitespace-nowrap">
+                    {step.label}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

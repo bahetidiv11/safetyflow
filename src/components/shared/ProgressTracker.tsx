@@ -32,24 +32,26 @@ export function ProgressTracker({ currentStatus, className }: ProgressTrackerPro
 
   return (
     <div className={cn('w-full', className)}>
-      {/* Container with fixed height for alignment */}
-      <div className="relative flex items-start justify-between">
-        {/* Background connecting line - spans full width at circle center */}
+      {/* Container with flex items-center for perfect horizontal alignment */}
+      <div className="relative flex items-center justify-between">
+        {/* Background connecting line - perfectly centered with circles */}
         <div 
           className="absolute h-0.5 bg-border" 
           style={{ 
-            top: '16px', 
-            left: '16px', 
-            right: '16px' 
+            top: '50%', 
+            left: '40px', 
+            right: '40px',
+            transform: 'translateY(-50%)'
           }} 
         />
         {/* Progress line - turns blue as user advances */}
         <div 
           className="absolute h-0.5 bg-accent transition-all duration-500" 
           style={{ 
-            top: '16px', 
-            left: '16px',
-            width: currentStepIndex === 0 ? '0%' : `calc(${(currentStepIndex / (steps.length - 1)) * 100}% - 32px)`
+            top: '50%',
+            left: '40px',
+            transform: 'translateY(-50%)',
+            width: currentStepIndex === 0 ? '0%' : `calc(${(currentStepIndex / (steps.length - 1)) * 100}% - 80px)`
           }} 
         />
 
@@ -59,7 +61,7 @@ export function ProgressTracker({ currentStatus, className }: ProgressTrackerPro
 
           return (
             <div key={step.status} className="relative z-10 flex flex-col items-center" style={{ width: '80px' }}>
-              {/* Circle - perfectly aligned on the line */}
+              {/* Circle - perfectly aligned on the horizontal line */}
               <div
                 className={cn(
                   'flex items-center justify-center w-8 h-8 rounded-full border-2 bg-background transition-all duration-300',
@@ -76,10 +78,19 @@ export function ProgressTracker({ currentStatus, className }: ProgressTrackerPro
                   <span className="text-sm font-semibold">{index + 1}</span>
                 )}
               </div>
-              {/* Label - below the circle */}
+            </div>
+          );
+        })}
+      </div>
+      {/* Labels row - separate from circles for alignment */}
+      <div className="flex items-start justify-between mt-2">
+        {steps.map((step, index) => {
+          const isCurrent = index === currentStepIndex;
+          return (
+            <div key={`label-${step.status}`} className="flex justify-center" style={{ width: '80px' }}>
               <span
                 className={cn(
-                  'mt-2 text-xs font-medium text-center whitespace-nowrap transition-colors',
+                  'text-xs font-medium text-center whitespace-nowrap transition-colors',
                   isCurrent ? 'text-foreground' : 'text-muted-foreground'
                 )}
               >
