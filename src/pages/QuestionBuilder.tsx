@@ -12,7 +12,9 @@ import {
   Loader2,
   Brain,
   RefreshCw,
-  Info
+  Info,
+  Database,
+  Building2
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Header } from '../components/layout/Header';
@@ -27,6 +29,35 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
+
+// Mock Enterprise Pre-Approved Questions Database
+const ENTERPRISE_QUESTION_MAP: Record<string, { question: string; field: string; type: FollowUpQuestion['type']; options?: string[]; required: boolean }[]> = {
+  'dosage': [
+    { question: 'Please provide the exact dose, frequency, and route of administration as documented.', field: 'dosage', type: 'text', required: true },
+  ],
+  'dechallenge': [
+    { question: 'Was the suspect product discontinued? If so, did symptoms improve, worsen, or remain unchanged?', field: 'dechallenge', type: 'select', options: ['Yes - symptoms improved', 'Yes - no change', 'Yes - symptoms worsened', 'Product not discontinued', 'Unknown'], required: true },
+  ],
+  'rechallenge': [
+    { question: 'Was the suspect product reintroduced after discontinuation? If yes, did the event recur?', field: 'rechallenge', type: 'select', options: ['Yes - event recurred', 'Yes - event did not recur', 'Not reintroduced', 'Unknown'], required: false },
+  ],
+  'concomitant_medications': [
+    { question: 'Please list all concomitant medications (including OTC, supplements) the patient was taking at the time of the event.', field: 'concomitant_medications', type: 'multiselect', options: ['Aspirin', 'Ibuprofen', 'Acetaminophen', 'Omeprazole', 'Metformin', 'Lisinopril', 'Atorvastatin', 'Other'], required: false },
+  ],
+  'lot_number': [
+    { question: 'Please provide the lot/batch number from the product packaging.', field: 'lot_number', type: 'text', required: true },
+  ],
+  'event_onset_date': [
+    { question: 'What was the exact date when the adverse event first occurred?', field: 'event_onset_date', type: 'date', required: true },
+  ],
+  'outcome': [
+    { question: 'What is the current outcome/status of the patient regarding this event?', field: 'outcome', type: 'select', options: ['Recovered', 'Recovering', 'Not recovered', 'Recovered with sequelae', 'Fatal', 'Unknown'], required: true },
+  ],
+  'medical_history': [
+    { question: 'Please provide relevant medical history that may be pertinent to this event.', field: 'medical_history', type: 'text', required: false },
+  ],
+};
 
 export default function QuestionBuilder() {
   const navigate = useNavigate();
@@ -34,7 +65,8 @@ export default function QuestionBuilder() {
   const [questions, setQuestions] = useState<FollowUpQuestion[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reasoning, setReasoning] = useState<string>('');
-
+  const [useEnterpriseMapping, setUseEnterpriseMapping] = useState(false);
+  const [enterpriseMappingActive, setEnterpriseMappingActive] = useState(false);
   // Generate questions via AI based on drug-event pair
   const generateAIQuestions = async () => {
     if (!currentCase?.extractedData) return;
@@ -264,6 +296,70 @@ export default function QuestionBuilder() {
               <RefreshCw className={cn("h-4 w-4", isGenerating && "animate-spin")} />
               Regenerate
             </Button>
+          </div>
+        </div>
+
+        {/* Enterprise DB Mapping Toggle */}
+        <div className="card-elevated p-4 mb-6 bg-gradient-to-r from-success/5 to-transparent border-success/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
+                <Building2 className="h-5 w-5 text-success" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground mb-1">Enterprise DB Mapping</h3>
+                <p className="text-sm text-muted-foreground">
+                  Map AI-identified gaps to pre-approved regulatory questions from corporate database
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {enterpriseMappingActive && (
+                <span className="text-xs font-medium text-success bg-success/10 px-2 py-1 rounded-full flex items-center gap-1">
+                  <Database className="h-3 w-3" />
+                  Mapped
+                </span>
+              )}
+              <Switch
+                checked={useEnterpriseMapping}
+                onCheckedChange={(checked) => {
+                  setUseEnterpriseMapping(checked);
+                  if (checked) {
+                    // Map AI-identified gaps to enterprise pre-approved questions
+                    const missingFieldNames = currentCase?.missingFields
+                      ?.filter(f => !f.available)
+                      .map(f => f.field) || [];
+                    
+                    const enterpriseQuestions: FollowUpQuestion[] = [];
+                    missingFieldNames.forEach((fieldName, idx) => {
+                      const enterpriseQ = ENTERPRISE_QUESTION_MAP[fieldName];
+                      if (enterpriseQ) {
+                        enterpriseQ.forEach((q, qIdx) => {
+                          enterpriseQuestions.push({
+                            id: `enterprise-${fieldName}-${idx}-${qIdx}`,
+                            ...q,
+                            hint: `Pre-approved regulatory question from Enterprise DB`,
+                            clinicalRationale: 'Standardized question mapped from corporate regulatory database',
+                          });
+                        });
+                      }
+                    });
+                    
+                    if (enterpriseQuestions.length > 0) {
+                      setQuestions(enterpriseQuestions);
+                      setEnterpriseMappingActive(true);
+                      setReasoning('Questions mapped from Enterprise Pre-Approved Regulatory Database');
+                      toast.success(`Mapped ${enterpriseQuestions.length} questions from Enterprise DB`);
+                    } else {
+                      toast.info('No matching enterprise questions found for identified gaps');
+                    }
+                  } else {
+                    setEnterpriseMappingActive(false);
+                    generateAIQuestions();
+                  }
+                }}
+              />
+            </div>
           </div>
         </div>
 
