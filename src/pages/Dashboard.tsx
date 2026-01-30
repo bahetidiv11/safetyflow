@@ -6,10 +6,8 @@ import {
   Clock, 
   CheckCircle2,
   ArrowUpRight,
-  FileText as FileTextIcon,
   Zap,
-  FileText,
-  BookOpen
+  FileText
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Header } from '../components/layout/Header';
@@ -203,23 +201,6 @@ export default function Dashboard() {
               Ready for first case.
             </div>
           )}
-
-        {/* Footer with Project Report Link */}
-        <div className="mt-12 pt-8 border-t border-border">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h3 className="font-semibold text-foreground">Competition Submission</h3>
-              <p className="text-sm text-muted-foreground">View the complete project documentation and methodology</p>
-            </div>
-            <Button 
-              variant="hero" 
-              onClick={() => navigate('/project-report')}
-            >
-              <BookOpen className="h-4 w-4" />
-              View Full Project Report
-            </Button>
-          </div>
-        </div>
       </main>
     </div>
   );
