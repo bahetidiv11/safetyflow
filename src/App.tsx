@@ -15,7 +15,6 @@ import OutreachPreview from "./pages/OutreachPreview";
 import ReporterInbox from "./pages/ReporterInbox";
 import ReporterForm from "./pages/ReporterForm";
 import ImpactDashboard from "./pages/ImpactDashboard";
-import ProjectReport from "./pages/ProjectReport";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,7 +38,6 @@ const App = () => (
             <Route path="/case/:id/outreach" element={<OutreachPreview />} />
             <Route path="/reporter/inbox" element={<ReporterInbox />} />
             <Route path="/reporter/form/:id" element={<ReporterForm />} />
-            <Route path="/project-report" element={<ProjectReport />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
