@@ -11,6 +11,8 @@ import { Button } from '../components/ui/button';
 import { Header } from '../components/layout/Header';
 import { RiskBadge } from '../components/shared/RiskBadge';
 import { ProgressTracker } from '../components/shared/ProgressTracker';
+import { AuditTrail } from '../components/shared/AuditTrail';
+import { TechTooltip } from '../components/shared/TechTooltip';
 import { useApp } from '../contexts/AppContext';
 import { cn } from '../lib/utils';
 
@@ -197,6 +199,14 @@ export default function RiskStratification() {
             </p>
           </div>
         </div>
+
+        {/* Audit Trail */}
+        <AuditTrail
+          createdAt={currentCase?.createdAt}
+          extractionCompletedAt={currentCase?.updatedAt}
+          meddraValidatedAt={currentCase?.extractedData?.adverse_event?.meddra_pt ? currentCase?.updatedAt : null}
+          className="mb-8"
+        />
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3 justify-end">

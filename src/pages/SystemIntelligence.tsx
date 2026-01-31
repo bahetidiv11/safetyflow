@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Header } from '../components/layout/Header';
+import { TechTooltip } from '../components/shared/TechTooltip';
 import { useApp } from '../contexts/AppContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 
@@ -308,7 +309,10 @@ export default function SystemIntelligence() {
               </span>
             </div>
             <p className="text-2xl font-bold text-foreground mb-1">{avgInferenceLatency.display}</p>
-            <p className="text-sm text-muted-foreground">Avg. Inference Latency</p>
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
+              Avg. Inference Latency
+              <TechTooltip term="inference_latency" />
+            </p>
             <p className="text-xs text-muted-foreground mt-2 border-t border-border pt-2">
               Calculated from <code className="bg-muted px-1 rounded">extraction_completed_at - created_at</code>
             </p>
@@ -325,9 +329,13 @@ export default function SystemIntelligence() {
               </span>
             </div>
             <p className="text-2xl font-bold text-foreground mb-1">{extractionSuccessRate.display}</p>
-            <p className="text-sm text-muted-foreground">Model Precision</p>
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
+              Model Precision
+              <TechTooltip term="model_precision" />
+            </p>
             <p className="text-xs text-muted-foreground mt-2 border-t border-border pt-2">
               % of cases with non-null <code className="bg-muted px-1 rounded">meddra_pt</code>
+              <TechTooltip term="meddra_pt" className="ml-1" />
             </p>
           </div>
 
@@ -490,9 +498,10 @@ export default function SystemIntelligence() {
                     <span className="text-muted-foreground">Schema Type:</span>
                     <span className="ml-1 font-mono text-foreground">JSON Schema v7</span>
                   </div>
-                  <div>
+                  <div className="flex items-center gap-1">
                     <span className="text-muted-foreground">Standard:</span>
                     <span className="ml-1 font-mono text-foreground">ICH E2B(R3)</span>
+                    <TechTooltip term="e2b_r3" />
                   </div>
                 </div>
               </div>

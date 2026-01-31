@@ -104,7 +104,16 @@ export default function CaseIntake() {
   };
 
   const handleExtract = async () => {
-    if (!narrative.trim()) return;
+    // Defensive validation: ensure narrative is meaningful
+    const trimmedNarrative = narrative.trim();
+    if (!trimmedNarrative) {
+      toast.error('Input Required: Please enter a narrative before extracting.');
+      return;
+    }
+    if (trimmedNarrative.length < 50) {
+      toast.error('Input Required: Narrative text is too short for clinical extraction. Please provide at least 50 characters of meaningful clinical content.');
+      return;
+    }
     
     setIsExtracting(true);
     const startedAtIso = new Date().toISOString();
