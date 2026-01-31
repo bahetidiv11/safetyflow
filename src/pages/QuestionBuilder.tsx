@@ -14,7 +14,8 @@ import {
   RefreshCw,
   Info,
   Database,
-  Building2
+  Building2,
+  Code2
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Header } from '../components/layout/Header';
@@ -30,6 +31,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
+import { LogicViewOverlay } from '@/components/shared/LogicViewOverlay';
 
 // Mock Enterprise Pre-Approved Questions Database
 const ENTERPRISE_QUESTION_MAP: Record<string, { question: string; field: string; type: FollowUpQuestion['type']; options?: string[]; required: boolean }[]> = {
@@ -67,6 +69,7 @@ export default function QuestionBuilder() {
   const [reasoning, setReasoning] = useState<string>('');
   const [useEnterpriseMapping, setUseEnterpriseMapping] = useState(false);
   const [enterpriseMappingActive, setEnterpriseMappingActive] = useState(false);
+  const [showLogicView, setShowLogicView] = useState(false);
   // Generate questions via AI based on drug-event pair
   const generateAIQuestions = async () => {
     if (!currentCase?.extractedData) return;
@@ -361,7 +364,26 @@ export default function QuestionBuilder() {
               />
             </div>
           </div>
+          
+          {/* Logic View Toggle */}
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-success/20">
+            <div className="flex items-center gap-2">
+              <Code2 className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Show Algorithm Logic</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowLogicView(true)}
+            >
+              <Code2 className="h-4 w-4 mr-1" />
+              Logic View
+            </Button>
+          </div>
         </div>
+
+        {/* Logic View Overlay */}
+        <LogicViewOverlay isOpen={showLogicView} onClose={() => setShowLogicView(false)} />
 
         {/* Question List */}
         <div className="card-elevated overflow-hidden mb-6">

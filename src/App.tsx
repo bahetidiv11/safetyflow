@@ -15,6 +15,7 @@ import OutreachPreview from "./pages/OutreachPreview";
 import ReporterInbox from "./pages/ReporterInbox";
 import ReporterForm from "./pages/ReporterForm";
 import ImpactDashboard from "./pages/ImpactDashboard";
+import SystemIntelligence from "./pages/SystemIntelligence";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/case/:id/outreach" element={<OutreachPreview />} />
             <Route path="/reporter/inbox" element={<ReporterInbox />} />
             <Route path="/reporter/form/:id" element={<ReporterForm />} />
+            <Route path="/system-intelligence" element={<SystemIntelligence />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
