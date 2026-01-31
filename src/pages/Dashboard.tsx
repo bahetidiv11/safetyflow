@@ -7,8 +7,7 @@ import {
   CheckCircle2,
   ArrowUpRight,
   Zap,
-  FileText,
-  Cpu
+  FileText
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Header } from '../components/layout/Header';
@@ -117,13 +116,9 @@ export default function Dashboard() {
                 Early risk stratification and personalised follow-ups are reducing repeat outreach attempts
               </p>
             </div>
-            <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate('/analytics')}>
+            <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate('/system-intelligence')}>
               View Analytics
               <ArrowUpRight className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate('/system-intelligence')}>
-              <Cpu className="h-4 w-4" />
-              System Intelligence
             </Button>
           </div>
         </div>
