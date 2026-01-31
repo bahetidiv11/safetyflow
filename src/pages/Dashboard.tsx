@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
@@ -13,12 +14,20 @@ import { Button } from '../components/ui/button';
 import { Header } from '../components/layout/Header';
 import { RiskBadge } from '../components/shared/RiskBadge';
 import { StatusPill } from '../components/shared/StatusPill';
+import { MetricSkeleton, TableRowSkeleton } from '../components/shared/MetricSkeleton';
 import { useApp } from '../contexts/AppContext';
 import type { RiskLevel } from '../types/icsr';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { metrics, cases } = useApp();
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Simulate initial data fetch loading state
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const recentCases = cases.slice(0, 8);
 
@@ -80,26 +89,35 @@ export default function Dashboard() {
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {metricCards.map((metric) => (
-            <div
-              key={metric.label}
-              className={`card-elevated p-5 ${metric.highlight ? 'border-l-4 border-l-risk-high' : ''}`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-                  <metric.icon className="h-5 w-5 text-secondary-foreground" />
+          {isLoading ? (
+            <>
+              <MetricSkeleton />
+              <MetricSkeleton highlight />
+              <MetricSkeleton />
+              <MetricSkeleton />
+            </>
+          ) : (
+            metricCards.map((metric) => (
+              <div
+                key={metric.label}
+                className={`card-elevated p-5 ${metric.highlight ? 'border-l-4 border-l-risk-high' : ''}`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+                    <metric.icon className="h-5 w-5 text-secondary-foreground" />
+                  </div>
+                  <div className={`flex items-center gap-1 text-xs font-medium ${
+                    metric.trendUp ? 'text-success' : 'text-risk-high'
+                  }`}>
+                    <TrendingUp className={`h-3 w-3 ${!metric.trendUp && 'rotate-180'}`} />
+                    {metric.trend}
+                  </div>
                 </div>
-                <div className={`flex items-center gap-1 text-xs font-medium ${
-                  metric.trendUp ? 'text-success' : 'text-risk-high'
-                }`}>
-                  <TrendingUp className={`h-3 w-3 ${!metric.trendUp && 'rotate-180'}`} />
-                  {metric.trend}
-                </div>
+                <p className="text-2xl font-bold text-foreground mb-1">{metric.value}</p>
+                <p className="text-sm text-muted-foreground">{metric.label}</p>
               </div>
-              <p className="text-2xl font-bold text-foreground mb-1">{metric.value}</p>
-              <p className="text-sm text-muted-foreground">{metric.label}</p>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Performance Highlight */}
@@ -153,54 +171,62 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                 {recentCases.map((caseItem) => (
-                  <tr 
-                     key={String(caseItem.id)} 
-                    className="hover:bg-muted/30 transition-colors cursor-pointer"
-                     onClick={() => navigate(`/case/${caseItem.id}/risk`)}
-                  >
-                    <td className="px-4 py-4">
-                       <span className="font-medium text-foreground">{String(caseItem.id)}</span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div>
-                         <p className="font-medium text-foreground">{String(caseItem.suspect_drug || '—')}</p>
-                         <p className="text-sm text-muted-foreground">{String(caseItem.adverse_event || '—')}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm text-muted-foreground capitalize">
-                         {String(caseItem.reporter_type || '').toLowerCase() === 'hcp'
-                           ? 'Healthcare Professional'
-                           : String(caseItem.reporter_type || '').toLowerCase() === 'patient'
-                           ? 'Patient'
-                           : '—'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                       <RiskBadge level={toRiskLevel(caseItem.risk_score)} size="sm" />
-                    </td>
-                    <td className="px-4 py-4">
-                       <StatusPill status={(String(caseItem.status || 'intake') as any)} size="sm" />
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <Button variant="ghost" size="sm">
-                        Review
-                        <ArrowUpRight className="h-3 w-3" />
-                      </Button>
+                {isLoading ? (
+                  <>
+                    <TableRowSkeleton />
+                    <TableRowSkeleton />
+                    <TableRowSkeleton />
+                  </>
+                ) : recentCases.length > 0 ? (
+                  recentCases.map((caseItem) => (
+                    <tr 
+                      key={String(caseItem.id)} 
+                      className="hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/case/${caseItem.id}/risk`)}
+                    >
+                      <td className="px-4 py-4">
+                        <span className="font-medium text-foreground">{String(caseItem.id)}</span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div>
+                          <p className="font-medium text-foreground">{String(caseItem.suspect_drug || '—')}</p>
+                          <p className="text-sm text-muted-foreground">{String(caseItem.adverse_event || '—')}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-muted-foreground capitalize">
+                          {String(caseItem.reporter_type || '').toLowerCase() === 'hcp'
+                            ? 'Healthcare Professional'
+                            : String(caseItem.reporter_type || '').toLowerCase() === 'patient'
+                            ? 'Patient'
+                            : '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <RiskBadge level={toRiskLevel(caseItem.risk_score)} size="sm" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <StatusPill status={(String(caseItem.status || 'intake') as any)} size="sm" />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <Button variant="ghost" size="sm">
+                          Review
+                          <ArrowUpRight className="h-3 w-3" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                      No cases yet. Click "New Case Intake" to get started.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
         </div>
-
-          {cases.length === 0 && (
-            <div className="mt-4 text-sm text-muted-foreground">
-              Ready for first case.
-            </div>
-          )}
       </main>
     </div>
   );
